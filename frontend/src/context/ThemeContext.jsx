@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-const STORAGE_KEY = 'sof_theme';
+// Versioned so visitors who inherited the old system-based default start in light mode.
+const STORAGE_KEY = 'sof_theme_v2';
 const ThemeContext = createContext(null);
 
 function resolveTheme(preference) {
@@ -9,7 +10,7 @@ function resolveTheme(preference) {
 }
 
 export function ThemeProvider({ children }) {
-  const [preference, setPreference] = useState(() => localStorage.getItem(STORAGE_KEY) || 'system');
+  const [preference, setPreference] = useState(() => localStorage.getItem(STORAGE_KEY) || 'light');
   const [resolvedTheme, setResolvedTheme] = useState(() => resolveTheme(preference));
 
   useEffect(() => {
