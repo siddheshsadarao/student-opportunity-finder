@@ -1,12 +1,16 @@
 # Student Opportunity Finder
 
+## Live application
+
+**[Open Student Opportunity Finder](https://studentopportunityfinder.netlify.app/)**
+
 A full-stack web platform that centralises student opportunities — internships,
 scholarships, hackathons, competitions, courses, workshops, fellowships and career
 programmes — and recommends the most relevant ones to each student using a
 content-based machine learning engine.
 
 Opportunities are **imported automatically** every few hours from Devpost, Unstop,
-Devfolio, HackerEarth and company job boards, so the catalogue stays current
+Devfolio, coding platforms and company job boards, so the catalogue stays current
 without anyone typing listings by hand.
 
 > **B.Tech Data Science semester project.**
@@ -742,15 +746,15 @@ never looks expired.
 
 ## Team members
 
-| Name | Roll number | Contribution |
-| --- | --- | --- |
-| *Your name* | | |
-| | | |
-| | | |
+| Name | Contribution |
+| --- | --- |
+| Siddhesh Rambhau Sadarao | Full-stack development and system integration |
+| Ninad Santosh Mahajan | Backend and database development |
+| Nishant Bharat Jadhav | Frontend development and UI/UX |
+| Aditya Dnyaneshwar Sabale | Data ingestion and project documentation |
 
-**Guide:** *Faculty name*
-**Course:** B.Tech Data Science — *semester*
-**Institution:** *College name*
+**Course:** B.Tech Data Science  
+**Institution:** RCPIT, Shirpur
 
 ---
 
