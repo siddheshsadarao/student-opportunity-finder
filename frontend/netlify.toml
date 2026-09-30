@@ -1,0 +1,43 @@
+# =============================================================================
+#  Netlify build configuration — frontend only
+# =============================================================================
+#  Netlify hosts the built React app. It CANNOT host the rest of the project:
+#  PostgreSQL, the Express API, the FastAPI recommendation service and the
+#  scheduled importer all need long-running processes, which Netlify does not
+#  provide. Those stay on the VPS.
+#
+#      Browser ──► Netlify (React build + /api proxy) ──► VPS (API, ML, DB)
+#
+#  This file is only read when Netlify BUILDS the site from your Git repo.
+#
+#  Routing and header rules deliberately live in `public/_redirects` and
+#  `public/_headers` instead of here. Vite copies those into dist/ on every
+#  build, so they apply to drag-and-drop ("Netlify Drop") deploys too — which
+#  never see this file, because it sits outside the published folder.
+#  Keeping them in one place means the two deployment methods can never drift
+#  apart.
+#
+#  ► Configure the API proxy target with the private API_ORIGIN environment
+#    variable in Netlify. Never commit the real server address here.
+# =============================================================================
+
+[build]
+  # Paths are relative to the base directory, which must be set to "frontend"
+  # in the Netlify UI (Site configuration → Build & deploy).
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Match the Node version used locally, so a dependency cannot build
+  # differently on Netlify than it does on your machine.
+  NODE_VERSION = "20"
+
+# -----------------------------------------------------------------------------
+# Functions
+# -----------------------------------------------------------------------------
+# netlify/functions/api.js proxies /api/* to the backend. It exists because
+# Netlify's redirect proxy cannot reach a non-standard port, which is where
+# the API listens.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

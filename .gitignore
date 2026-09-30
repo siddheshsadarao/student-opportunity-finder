@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Environment files -- NEVER commit these, they contain secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local archives, database exports and credentials
+*.zip
+*.tar
+*.tar.gz
+*.dump
+*.backup
+*.pem
+*.key
+*.p12
+id_rsa*
+
+# Test output
+coverage/
+.pytest_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Netlify folder
+.netlify/

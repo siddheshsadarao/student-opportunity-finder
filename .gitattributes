@@ -1,0 +1,30 @@
+# Force Unix line endings on everything that runs on the server.
+#
+# Windows checks files out with CRLF by default. A shell script with CRLF
+# fails on Linux with a confusing "bad interpreter: /usr/bin/env bash^M",
+# and a .env file with CRLF gives you passwords with an invisible \r on the
+# end, which produces "password authentication failed" for no visible reason.
+*.sh        text eol=lf
+*.bash      text eol=lf
+.env*       text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+
+# _redirects and _headers are read by Netlify and must be LF too.
+_redirects  text eol=lf
+_headers    text eol=lf
+
+# Everything else: normalise to LF in the repository, let git decide locally.
+* text=auto
+
+# Binary files git must never touch.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.svg  text eol=lf
+*.pdf  binary
+*.zip  binary

@@ -1,0 +1,35 @@
+# =============================================================================
+#  Netlify redirect rules
+# =============================================================================
+#  Everything in frontend/public/ is copied verbatim into dist/ by Vite, so
+#  this file ends up at the root of the published site on EVERY build.
+#
+#  That matters because Netlify reads routing rules from two places:
+#    * netlify.toml  -> only when Netlify builds the site from your Git repo
+#    * _redirects    -> always, including drag-and-drop ("Netlify Drop") deploys
+#
+#  Since a Drop deploy only uploads the dist folder, netlify.toml (which lives
+#  one level up in frontend/) is never seen. This file is therefore the single
+#  source of truth for routing, and it works for both deployment methods.
+#
+#  Order matters: Netlify applies the FIRST rule that matches.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# NOTE: there is no /api rule here on purpose.
+#
+# Netlify's redirect proxy only forwards to standard ports, and the API runs on
+# port 8081. A rule here returned 502 and never reached the server. The API is
+# handled by netlify/functions/api.js instead, which has no port restriction.
+# Change the backend address there (or with the API_ORIGIN environment
+# variable in the Netlify UI).
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# 2. Single-page-app fallback
+# -----------------------------------------------------------------------------
+# React Router does the routing in the browser. Without this, opening
+# /dashboard directly (or pressing F5 on it) would ask Netlify for a file
+# named "dashboard", which does not exist, and return 404.
+# Status 200 means "serve index.html for this path" rather than redirecting.
+/*  /index.html  200
