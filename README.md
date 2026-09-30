@@ -753,7 +753,7 @@ never looks expired.
 | Nishant Bharat Jadhav | Frontend development and UI/UX |
 | Aditya Dnyaneshwar Sabale | Data ingestion and project documentation |
 
-**Course:** B.Tech Data Science  
+**Course:** B.Tech Data Science<br>
 **Institution:** RCPIT, Shirpur
 
 ---
