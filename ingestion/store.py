@@ -38,6 +38,7 @@ class RunStats:
     created: int = 0
     updated: int = 0
     skipped: int = 0
+    failed: bool = False
 
     def __str__(self) -> str:
         return (
@@ -62,7 +63,7 @@ _NOISE_RE = re.compile(r"\b(20\d{2}|hackathon|hack|challenge|contest|edition|v?\
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 
 
-def fingerprint(title: str, deadline) -> str:
+def fingerprint(title: str, deadline, organization: str = '') -> str:
     """
     Builds a comparable key for the same event listed on different sites.
 
@@ -73,7 +74,8 @@ def fingerprint(title: str, deadline) -> str:
     """
     cleaned = _NOISE_RE.sub(" ", (title or "").lower())
     cleaned = _NON_ALNUM_RE.sub("", cleaned)
-    return f"{cleaned}|{deadline}"
+    employer = _NON_ALNUM_RE.sub('', organization.lower())
+    return f"{cleaned}|{deadline}|{employer}"
 
 
 def slugify(text: str) -> str:
@@ -92,13 +94,13 @@ def load_existing_fingerprints(cursor) -> dict[str, tuple[str, str]]:
     """Fingerprint -> (source, source_id) for every opportunity already stored."""
     cursor.execute(
         """
-        SELECT title, deadline, source, source_id
+        SELECT title, organization, deadline, source, source_id
           FROM opportunities
          WHERE is_active = TRUE AND deadline >= CURRENT_DATE
         """
     )
     return {
-        fingerprint(row["title"], row["deadline"]): (row["source"], row["source_id"])
+        fingerprint(row["title"], row["deadline"], row['organization']): (row["source"], row["source_id"])
         for row in cursor.fetchall()
     }
 
@@ -165,7 +167,7 @@ def save_opportunities(
                     continue
 
                 # --- cross-source duplicate check ---
-                key = fingerprint(item.title, item.deadline)
+                key = fingerprint(item.title, item.deadline, item.organization)
                 owner = seen_fingerprints.get(key)
                 if owner and owner != (item.source, item.source_id):
                     # Already have this event from another site; keep the first.
@@ -177,19 +179,21 @@ def save_opportunities(
                     INSERT INTO opportunities
                         (title, organization, organization_logo, category_id, description,
                          eligibility, benefits, location, mode, duration, stipend, prize,
-                         deadline, start_date, end_date, application_url, source, source_id,
-                         source_url, is_demo, is_external, is_active, review_status, ingested_at)
+                         deadline, deadline_at, start_date, end_date, application_url, source, source_id,
+                         source_url, source_board, is_demo, is_external, is_active, review_status, ingested_at)
                     VALUES
                         (%(title)s, %(organization)s, %(logo)s, %(category_id)s, %(description)s,
                          %(eligibility)s, %(benefits)s, %(location)s, %(mode)s, %(duration)s,
                          %(prize)s, %(prize)s,
-                         %(deadline)s, %(start_date)s, %(end_date)s, %(application_url)s,
-                         %(source)s, %(source_id)s, %(source_url)s,
+                         %(deadline)s, %(deadline_at)s, %(start_date)s, %(end_date)s, %(application_url)s,
+                         %(source)s, %(source_id)s, %(source_url)s, %(source_board)s,
                          FALSE, TRUE, TRUE, %(review_status)s, NOW())
                     ON CONFLICT (source, source_id) WHERE source_id IS NOT NULL
                     DO UPDATE SET
                         title           = EXCLUDED.title,
                         organization    = EXCLUDED.organization,
+                        organization_logo = EXCLUDED.organization_logo,
+                        category_id     = EXCLUDED.category_id,
                         description     = EXCLUDED.description,
                         eligibility     = EXCLUDED.eligibility,
                         benefits        = EXCLUDED.benefits,
@@ -198,9 +202,13 @@ def save_opportunities(
                         prize           = EXCLUDED.prize,
                         stipend         = EXCLUDED.stipend,
                         deadline        = EXCLUDED.deadline,
+                        deadline_at     = EXCLUDED.deadline_at,
                         start_date      = EXCLUDED.start_date,
                         end_date        = EXCLUDED.end_date,
                         application_url = EXCLUDED.application_url,
+                        source_url      = EXCLUDED.source_url,
+                        source_board    = EXCLUDED.source_board,
+                        duration        = EXCLUDED.duration,
                         is_active       = TRUE,
                         ingested_at     = NOW()
                     RETURNING id, (xmax = 0) AS was_inserted
@@ -218,12 +226,14 @@ def save_opportunities(
                         "duration": (item.duration or None),
                         "prize": (item.prize or None),
                         "deadline": item.deadline,
+                        "deadline_at": item.deadline_at,
                         "start_date": item.start_date,
                         "end_date": item.end_date,
                         "application_url": item.application_url,
                         "source": item.source,
                         "source_id": item.source_id,
                         "source_url": item.source_url,
+                        "source_board": item.source_board,
                         "review_status": review_status,
                     },
                 )
@@ -260,6 +270,26 @@ def save_opportunities(
     return stats
 
 
+def reconcile_completed_boards(source_key, boards, items) -> int:
+    """Hide removed roles only after a complete, successful employer snapshot."""
+    if not boards:
+        return 0
+    changed = 0
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            for board in boards:
+                ids = [item.source_id for item in items if item.source_board == board]
+                cursor.execute(
+                    """UPDATE opportunities SET is_active = FALSE
+                        WHERE is_external AND is_active AND source = %s AND source_board = %s
+                          AND NOT (source_id = ANY(%s::text[]))""",
+                    (source_key, board, ids),
+                )
+                changed += cursor.rowcount
+        connection.commit()
+    return changed
+
+
 def expire_old_opportunities() -> int:
     """
     Hides externally-ingested listings whose deadline has passed.
@@ -275,7 +305,8 @@ def expire_old_opportunities() -> int:
                    SET is_active = FALSE
                  WHERE is_external = TRUE
                    AND is_active = TRUE
-                   AND deadline < CURRENT_DATE
+                   AND (deadline < CURRENT_DATE OR deadline_at <= NOW()
+                        OR ingested_at IS NULL OR ingested_at <= NOW() - INTERVAL '48 hours')
                 """
             )
             count = cursor.rowcount

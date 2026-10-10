@@ -1,15 +1,13 @@
 """Public job-board feeds filtered down to genuine student opportunities."""
 from __future__ import annotations
 
-from datetime import date, timedelta
 
-from ..common import NormalisedOpportunity, PoliteSession, clean_text, detect_mode, detect_skills, looks_like_student_opportunity, parse_iso_date
+from ..common import NormalisedOpportunity, PoliteSession, clean_text, detect_mode, detect_skills, looks_like_student_opportunity, parse_iso_date, job_category
 
 REMOTIVE_KEY = "remotive"
 ARBEITNOW_KEY = "arbeitnow"
 REMOTIVE_URL = "https://remotive.com/api/remote-jobs"
 ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api"
-DEFAULT_WINDOW_DAYS = 35
 
 
 def fetch_remotive(session: PoliteSession, max_pages: int = 1) -> list[NormalisedOpportunity]:
@@ -34,10 +32,10 @@ def _from_remotive(job: dict) -> NormalisedOpportunity | None:
         organization=clean_text(job.get("company_name")) or "Employer",
         organization_logo=job.get("company_logo"),
         description=description,
-        category_slug="internship",
+        category_slug='internship' if job.get('job_type') == 'internship' else job_category(title),
         application_url=url,
         source_url=url,
-        deadline=date.today() + timedelta(days=DEFAULT_WINDOW_DAYS),
+        deadline=None,
         start_date=parse_iso_date(job.get("publication_date")),
         location=location,
         mode="Remote",
@@ -74,10 +72,10 @@ def _from_arbeitnow(job: dict) -> NormalisedOpportunity | None:
         title=title,
         organization=clean_text(job.get("company_name")) or "Employer",
         description=description,
-        category_slug="internship",
+        category_slug=job_category(title),
         application_url=url,
         source_url=url,
-        deadline=date.today() + timedelta(days=DEFAULT_WINDOW_DAYS),
+        deadline=None,
         start_date=parse_iso_date(job.get("created_at")),
         location=location,
         mode="Remote" if job.get("remote") else detect_mode(location, description),

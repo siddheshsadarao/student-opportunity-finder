@@ -22,7 +22,8 @@ const BASE_SELECT = `
   SELECT
     o.id, o.title, o.organization, o.organization_logo, o.description,
     o.eligibility, o.benefits, o.location, o.mode, o.duration, o.stipend,
-    o.deadline, o.application_url, o.source, o.is_demo, o.is_external, o.is_active,
+    o.deadline, o.deadline_at, o.ingested_at, o.application_url, o.source, o.is_demo, o.is_external, o.is_active,
+    sof_is_open(o) AS is_open,
     o.views_count, o.saves_count, o.created_at,
     c.id   AS category_id,
     c.name AS category_name,
@@ -60,12 +61,13 @@ export function mapOpportunity(row) {
     mode: row.mode,
     duration: row.duration,
     stipend: row.stipend,
-    deadline: row.deadline,
+    deadline: row.deadline_at || row.deadline,
+    lastCheckedAt: row.ingested_at,
     applicationUrl: row.application_url,
     source: row.source,
     isDemo: row.is_demo,
     isExternal: row.is_external,
-    isActive: row.is_active,
+    isActive: row.is_open ?? row.is_active,
     viewsCount: row.views_count,
     savesCount: row.saves_count,
     createdAt: row.created_at,
@@ -116,6 +118,8 @@ export const listOpportunities = asyncHandler(async (req, res) => {
     mode,
     deadlineBefore,
     organization,
+    eligibility,
+    source,
     includeExpired,
     sort = 'relevant',
     page = 1,
@@ -127,16 +131,16 @@ export const listOpportunities = asyncHandler(async (req, res) => {
   // Filter values only -- the viewer id is added separately below, because
   // the COUNT query does not need it.
   const filterParams = [];
-  const where = ['o.is_active = TRUE'];
+  const where = ['o.is_active = TRUE', 'o.is_demo = FALSE'];
 
   // Hide opportunities whose deadline has passed unless explicitly asked for.
-  if (includeExpired !== 'true') where.push('o.deadline >= CURRENT_DATE');
+  if (includeExpired !== 'true') where.push('sof_is_open(o)');
 
   if (search) {
     // The same text is compared against three columns, so it is pushed
     // three times -- one value per "?" placeholder.
-    filterParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    where.push('(o.title ILIKE ? OR o.organization ILIKE ? OR o.description ILIKE ?)');
+    filterParams.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    where.push('(o.title ILIKE ? OR o.organization ILIKE ? OR o.description ILIKE ? OR o.location ILIKE ? OR o.source ILIKE ?)');
   }
 
   if (category) {
@@ -158,6 +162,16 @@ export const listOpportunities = asyncHandler(async (req, res) => {
   if (organization) {
     filterParams.push(`%${organization}%`);
     where.push('o.organization ILIKE ?');
+  }
+
+  if (eligibility) {
+    filterParams.push(`%${eligibility}%`);
+    where.push('o.eligibility ILIKE ?');
+  }
+
+  if (source) {
+    filterParams.push(source);
+    where.push('o.source = ?');
   }
 
   if (deadlineBefore) {
@@ -251,7 +265,7 @@ export const listOpportunities = asyncHandler(async (req, res) => {
 export const getOpportunity = asyncHandler(async (req, res) => {
   const viewerId = req.user?.id ?? null;
 
-  const { rows } = await query(`${BASE_SELECT} WHERE o.id = $2`, [viewerId, req.params.id]);
+  const { rows } = await query(`${BASE_SELECT} WHERE o.id = $2 AND o.is_demo = FALSE`, [viewerId, req.params.id]);
   const row = rows[0];
   if (!row) throw ApiError.notFound('That opportunity could not be found.');
 
@@ -273,7 +287,7 @@ export const getFeatured = asyncHandler(async (req, res) => {
   const viewerId = req.user?.id ?? null;
   const { rows } = await query(
     `${BASE_SELECT}
-      WHERE o.is_active = TRUE AND o.deadline >= CURRENT_DATE
+      WHERE sof_is_open(o)
       ORDER BY ROW_NUMBER() OVER (
         PARTITION BY CASE WHEN o.is_external THEN o.source ELSE '__manual__' END
         ORDER BY o.saves_count DESC, o.deadline ASC
@@ -289,10 +303,10 @@ export const getFeatured = asyncHandler(async (req, res) => {
  * Everything the Discover page needs to build its filter dropdowns.
  */
 export const getFilterOptions = asyncHandler(async (req, res) => {
-  const [categories, skills, locations, organizations] = await Promise.all([
+  const [categories, skills, locations, organizations, sources] = await Promise.all([
     query(
       `SELECT c.id, c.name, c.slug, c.icon, c.color,
-              COUNT(o.id) FILTER (WHERE o.is_active AND o.deadline >= CURRENT_DATE)::int AS count
+              COUNT(o.id) FILTER (WHERE sof_is_open(o))::int AS count
          FROM categories c
          LEFT JOIN opportunities o ON o.category_id = c.id
         GROUP BY c.id
@@ -302,17 +316,23 @@ export const getFilterOptions = asyncHandler(async (req, res) => {
       `SELECT s.name, COUNT(os.opportunity_id)::int AS count
          FROM skills s
          JOIN opportunity_skills os ON os.skill_id = s.id
+         JOIN opportunities o ON o.id = os.opportunity_id AND o.is_demo = FALSE AND o.is_active = TRUE
         GROUP BY s.name
         ORDER BY count DESC, s.name
         LIMIT 40`
     ),
     query(
       `SELECT DISTINCT location FROM opportunities
-        WHERE is_active = TRUE ORDER BY location`
+        WHERE is_active = TRUE AND is_demo = FALSE ORDER BY location`
     ),
     query(
       `SELECT DISTINCT organization FROM opportunities
-        WHERE is_active = TRUE ORDER BY organization`
+        WHERE is_active = TRUE AND is_demo = FALSE ORDER BY organization`
+    ),
+    query(
+      `SELECT DISTINCT source FROM opportunities
+        WHERE is_active = TRUE AND is_demo = FALSE AND source IS NOT NULL
+        ORDER BY source`
     ),
   ]);
 
@@ -323,6 +343,7 @@ export const getFilterOptions = asyncHandler(async (req, res) => {
       skills: skills.rows.map((r) => r.name),
       locations: locations.rows.map((r) => r.location),
       organizations: organizations.rows.map((r) => r.organization),
+      sources: sources.rows.map((r) => r.source),
       modes: ['Remote', 'Hybrid', 'On-site'],
       sortOptions: [
         { value: 'relevant', label: 'Best Mix' },
@@ -343,7 +364,7 @@ export const getCalendar = asyncHandler(async (req, res) => {
   const { from, to, onlySaved } = req.query;
 
   const params = [viewerId];
-  const where = ['o.is_active = TRUE'];
+  const where = ['o.is_active = TRUE', 'o.is_demo = FALSE'];
 
   if (from) {
     params.push(from);

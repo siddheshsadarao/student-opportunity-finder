@@ -17,8 +17,6 @@ Add or remove companies in ingestion/config.py — no code change needed.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
-
 from ..common import (
     NormalisedOpportunity,
     PoliteSession,
@@ -26,16 +24,12 @@ from ..common import (
     detect_mode,
     detect_skills,
     looks_like_student_opportunity,
+    job_category,
 )
 from ..config import GREENHOUSE_COMPANIES
 
 SOURCE_KEY = "greenhouse"
 API_URL = "https://boards-api.greenhouse.io/v1/boards/{token}/jobs"
-
-# Company boards rarely publish an application deadline, so we show a rolling
-# window instead of inventing a specific date, and say so in the description.
-DEFAULT_WINDOW_DAYS = 45
-
 
 def fetch(session: PoliteSession, max_pages: int = 1) -> list[NormalisedOpportunity]:
     """Pulls student-relevant roles from each configured company board."""
@@ -52,14 +46,19 @@ def fetch(session: PoliteSession, max_pages: int = 1) -> list[NormalisedOpportun
             )
         except Exception as error:  # noqa: BLE001 - one bad board must not stop the rest
             print(f"  [greenhouse] skipping {token}: {error}")
+            session.board_errors.append(f'{token}: {str(error)[:180]}')
             continue
 
         jobs = (payload or {}).get("jobs") or []
+        if not isinstance(payload, dict) or not isinstance(payload.get('jobs'), list):
+            raise ValueError(f'Invalid Greenhouse response for {token}')
+        session.completed_boards.append(token)
         company_name = company.get("name") or token.title()
 
         for job in jobs:
             opportunity = _convert(job, company_name)
             if opportunity:
+                opportunity.source_board = token
                 results.append(opportunity)
 
     return results
@@ -93,8 +92,6 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
         from ..common import parse_iso_date
 
         deadline = parse_iso_date(deadline_raw.get("date"))
-    if deadline is None:
-        deadline = date.today() + timedelta(days=DEFAULT_WINDOW_DAYS)
 
     apply_url = job.get("absolute_url")
     if not apply_url:
@@ -106,7 +103,7 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
         title=title,
         organization=company_name,
         description=description,
-        category_slug="internship",
+        category_slug=job_category(title),
         application_url=apply_url,
         source_url=apply_url,
         deadline=deadline,
@@ -114,7 +111,7 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
         mode=detect_mode(location, description),
         prize=None,
         eligibility="See the official listing for eligibility and visa requirements.",
-        benefits="Paid role. Benefits are listed on the company's application page.",
+        benefits="Compensation and benefits are listed on the employer's application page.",
         duration=None,
         skills=detect_skills(title, description),
         organization_logo=None,

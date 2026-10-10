@@ -45,6 +45,8 @@ export const registerRules = [
   body('branch').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
   body('year').optional({ values: 'falsy' }).isInt({ min: 1, max: 6 }).withMessage('Year must be between 1 and 6.'),
   body('city').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
+  body('state').optional({ values: 'falsy' }).trim().isLength({ max: 80 }),
+  body('phone').optional({ values: 'falsy' }).trim().matches(/^\+?[0-9 ()-]{7,24}$/).withMessage('Enter a valid mobile number.'),
 ];
 
 export const loginRules = [
@@ -65,6 +67,7 @@ export const changePasswordRules = [
 
 export const resetPasswordRules = [
   body('email').trim().isEmail().withMessage('Enter a valid email address.').normalizeEmail(),
+  body('code').trim().isLength({ min: 6, max: 6 }).isNumeric().withMessage('Enter the 6-digit reset code.'),
   body('newPassword')
     .isLength({ min: 8 })
     .withMessage('New password must be at least 8 characters.')
@@ -78,11 +81,13 @@ export const resetPasswordRules = [
 // Student profile / onboarding
 // ---------------------------------------------------------------------------
 export const profileRules = [
+  body('phone').optional({ values: 'falsy' }).trim().matches(/^\+?[0-9 ()-]{7,24}$/).withMessage('Enter a valid phone number.'),
   body('college').optional({ values: 'null' }).trim().isLength({ max: 160 }),
   body('degree').optional({ values: 'null' }).trim().isLength({ max: 40 }),
   body('branch').optional({ values: 'null' }).trim().isLength({ max: 80 }),
   body('year').optional({ values: 'null' }).isInt({ min: 1, max: 6 }).withMessage('Year must be between 1 and 6.'),
   body('city').optional({ values: 'null' }).trim().isLength({ max: 80 }),
+  body('state').optional({ values: 'null' }).trim().isLength({ max: 80 }),
   body('careerGoal').optional({ values: 'null' }).trim().isLength({ max: 80 }),
   body('preferredMode')
     .optional({ values: 'null' })

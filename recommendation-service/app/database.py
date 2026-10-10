@@ -137,7 +137,8 @@ def fetch_opportunities() -> list[dict[str, Any]]:
               FROM opportunities o
               JOIN categories c ON c.id = o.category_id
              WHERE o.is_active = TRUE
-               AND o.deadline >= CURRENT_DATE
+               AND o.is_demo = FALSE
+               AND sof_is_open(o)
             """
         )
         rows = cursor.fetchall()

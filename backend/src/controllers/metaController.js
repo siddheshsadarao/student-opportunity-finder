@@ -10,7 +10,7 @@ export const listCategories = asyncHandler(async (req, res) => {
   const { rows } = await query(
     `SELECT c.id, c.name, c.slug, c.icon, c.color, c.description,
             COUNT(o.id) FILTER (
-              WHERE o.is_active = TRUE AND o.deadline >= CURRENT_DATE
+              WHERE sof_is_open(o)
             )::int AS opportunity_count
        FROM categories c
        LEFT JOIN opportunities o ON o.category_id = c.id
@@ -59,10 +59,11 @@ export const getPublicStats = asyncHandler(async (req, res) => {
   const { rows } = await query(
     `SELECT
         (SELECT COUNT(*)::int FROM opportunities
-          WHERE is_active = TRUE AND deadline >= CURRENT_DATE) AS active_opportunities,
-        (SELECT COUNT(*)::int FROM users WHERE role = 'student')     AS students,
+          WHERE sof_is_open(opportunities)) AS active_opportunities,
+        (SELECT COUNT(*)::int FROM users WHERE role = 'student' AND email_verified = TRUE
+          AND email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com')) AS students,
         (SELECT COUNT(*)::int FROM categories)                       AS categories,
-        (SELECT COUNT(DISTINCT organization)::int FROM opportunities) AS organizations`
+        (SELECT COUNT(DISTINCT organization)::int FROM opportunities WHERE is_demo = FALSE) AS organizations`
   );
   res.json({ success: true, data: rows[0] });
 });

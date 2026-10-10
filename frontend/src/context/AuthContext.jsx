@@ -63,7 +63,12 @@ export function AuthProvider({ children }) {
   );
 
   const register = useCallback(
-    async (payload) => applySession(await authApi.register(payload)),
+    async (payload) => authApi.register(payload),
+    []
+  );
+
+  const verifyEmail = useCallback(
+    async (payload) => applySession(await authApi.verifyEmail(payload)),
     [applySession]
   );
 
@@ -94,6 +99,7 @@ export function AuthProvider({ children }) {
     login,
     adminLogin,
     register,
+    verifyEmail,
     logout,
     updateProfile,
     refresh: loadSession,

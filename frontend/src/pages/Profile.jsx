@@ -14,6 +14,10 @@ import {
   Briefcase,
   TrendingUp,
   Lightbulb,
+  FileText,
+  Upload,
+  Download,
+  Trash2,
 } from 'lucide-react';
 import TagInput from '../components/TagInput';
 import { Avatar, Spinner, PageLoader } from '../components/ui';
@@ -24,6 +28,8 @@ import {
   DEGREES,
   BRANCHES,
   YEARS,
+  INDIAN_STATES,
+  INDIAN_UNION_TERRITORIES,
   WORK_MODE_PREFERENCES,
   CAREER_GOALS,
   POPULAR_SKILLS,
@@ -39,6 +45,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resumeBusy, setResumeBusy] = useState(false);
   const [form, setForm] = useState(null);
 
   const [skillOptions, setSkillOptions] = useState(POPULAR_SKILLS);
@@ -53,6 +60,8 @@ export default function Profile() {
     branch: data.branch || '',
     year: data.year || '',
     city: data.city || '',
+    state: data.state || '',
+    phone: data.phone || '',
     bio: data.bio || '',
     careerGoal: data.careerGoal || '',
     preferredMode: data.preferredMode || 'Any',
@@ -108,6 +117,8 @@ export default function Profile() {
         year: form.year ? Number(form.year) : null,
         college: form.college.trim() || null,
         city: form.city.trim() || null,
+        state: form.state,
+        phone: form.phone.trim(),
         bio: form.bio.trim() || null,
         preferredLocation: form.preferredLocation.trim() || null,
         careerGoal: form.careerGoal || null,
@@ -127,6 +138,57 @@ export default function Profile() {
   const onCancel = () => {
     setForm(toForm(profile));
     setEditing(false);
+  };
+
+  const onResumeSelect = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const extension = file.name.toLowerCase().split('.').pop();
+    if (!['pdf', 'docx', 'png', 'jpg', 'jpeg', 'webp'].includes(extension) || file.size > 4 * 1024 * 1024) {
+      toast.error('Choose a PDF, DOCX, PNG, JPG or WebP file up to 4 MB.');
+      return;
+    }
+    setResumeBusy(true);
+    try {
+      const result = await profileApi.uploadResume(file);
+      setProfile((current) => ({ ...current, hasResume: true, resumeOriginalName: result.resumeOriginalName }));
+      toast.success('Resume uploaded privately.');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setResumeBusy(false);
+    }
+  };
+
+  const onResumeDownload = async () => {
+    setResumeBusy(true);
+    try {
+      const blob = await profileApi.downloadResume();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = profile.resumeOriginalName || 'resume';
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setResumeBusy(false);
+    }
+  };
+
+  const onResumeDelete = async () => {
+    setResumeBusy(true);
+    try {
+      await profileApi.deleteResume();
+      setProfile((current) => ({ ...current, hasResume: false, resumeOriginalName: null }));
+      toast.success('Resume removed from your profile.');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setResumeBusy(false);
+    }
   };
 
   if (loading) return <PageLoader label="Loading your profile..." />;
@@ -179,6 +241,14 @@ export default function Profile() {
                 <h2 className="text-xl font-bold text-slate-900">{profile.name}</h2>
               )}
               <p className="mt-1 text-sm text-slate-500">{profile.email}</p>
+              {editing ? (
+                <label className="mt-3 block max-w-sm text-xs font-medium text-slate-500" htmlFor="profile-phone">
+                  Phone number (optional; not verified)
+                  <input id="profile-phone" type="tel" value={form.phone} onChange={(event) => set('phone', event.target.value)} placeholder="+91 98765 43210" className="input mt-1 text-sm" />
+                </label>
+              ) : profile.phone ? (
+                <p className="mt-1 text-sm text-slate-500">{profile.phone} <span className="text-xs text-amber-600">· Not verified</span></p>
+              ) : null}
               <p className="mt-0.5 text-xs text-slate-400">
                 Member since {formatDate(profile.joinedAt)}
               </p>
@@ -238,6 +308,24 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      <section className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700"><FileText className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-slate-900">Resume</h2>
+          <p className="mt-1 truncate text-sm text-slate-500">{profile.hasResume ? profile.resumeOriginalName : 'No resume uploaded'}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <label className={`btn-secondary btn-sm cursor-pointer ${resumeBusy ? 'pointer-events-none opacity-60' : ''}`}>
+            <Upload className="h-4 w-4" />{resumeBusy ? 'Working...' : profile.hasResume ? 'Replace' : 'Upload'}
+            <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" className="sr-only" onChange={onResumeSelect} disabled={resumeBusy} />
+          </label>
+          {profile.hasResume && <>
+            <button type="button" onClick={onResumeDownload} disabled={resumeBusy} className="btn-secondary btn-sm" aria-label="Download resume"><Download className="h-4 w-4" />Download</button>
+            <button type="button" onClick={onResumeDelete} disabled={resumeBusy} className="btn-secondary btn-sm text-red-600" aria-label="Remove resume"><Trash2 className="h-4 w-4" />Remove</button>
+          </>}
+        </div>
+      </section>
 
       {/* ------------------------------------------------------- education */}
       <section className="card p-6">
@@ -320,6 +408,15 @@ export default function Profile() {
             </div>
 
             <div>
+              <label htmlFor="p-state" className="label">State / Union territory</label>
+              <select id="p-state" autoComplete="address-level1" value={form.state} onChange={(event) => set('state', event.target.value)} className="input">
+                <option value="">Select</option>
+                <optgroup label="States">{INDIAN_STATES.map((state) => <option key={state} value={state}>{state}</option>)}</optgroup>
+                <optgroup label="Union territories">{INDIAN_UNION_TERRITORIES.map((state) => <option key={state} value={state}>{state}</option>)}</optgroup>
+              </select>
+            </div>
+
+            <div>
               <label htmlFor="p-city" className="label">
                 City
               </label>
@@ -339,6 +436,7 @@ export default function Profile() {
               ['Branch', profile.branch],
               ['Year', profile.year ? `Year ${profile.year}` : null],
               ['City', profile.city],
+              ['State / Union territory', profile.state],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-xs text-slate-500">{label}</dt>

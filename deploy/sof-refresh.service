@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Student Opportunity Finder live listings
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=sof
+WorkingDirectory=/var/www/sof
+ExecStart=/var/www/sof/ingestion/venv/bin/python -m ingestion.run
+TimeoutStartSec=50min
+UMask=0077

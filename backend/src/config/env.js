@@ -11,6 +11,8 @@
 import dotenv from 'dotenv';
 
 dotenv.config();
+// Optional private provider credentials, kept separate from database settings.
+dotenv.config({ path: '.env.email', override: true });
 
 /** Reads a variable and throws a clear error if it is missing. */
 function required(key, fallback) {
@@ -59,6 +61,17 @@ export const config = {
 
   recommendationServiceUrl:
     process.env.RECOMMENDATION_SERVICE_URL || 'http://127.0.0.1:8000',
+
+  email: {
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    fromName: process.env.EMAIL_FROM_NAME || 'Student Opportunity Finder',
+    fromAddress: process.env.EMAIL_FROM_ADDRESS || 'no-reply@studentopportunityfinder.com',
+  },
+
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+  },
 
   admin: {
     email: (process.env.ADMIN_EMAIL || 'admin@sof.com').toLowerCase(),

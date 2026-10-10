@@ -16,7 +16,8 @@ export const listSaved = asyncHandler(async (req, res) => {
     `SELECT
         o.id, o.title, o.organization, o.organization_logo, o.description,
         o.eligibility, o.benefits, o.location, o.mode, o.duration, o.stipend,
-        o.deadline, o.application_url, o.source, o.is_demo, o.is_active,
+        o.deadline, o.deadline_at, o.ingested_at, sof_is_open(o) AS is_open,
+        o.application_url, o.source, o.is_demo, o.is_active,
         o.views_count, o.saves_count, o.created_at,
         c.id AS category_id, c.name AS category_name, c.slug AS category_slug,
         c.icon AS category_icon, c.color AS category_color,
@@ -34,7 +35,7 @@ export const listSaved = asyncHandler(async (req, res) => {
      FROM saved_opportunities sv
      JOIN opportunities o ON o.id = sv.opportunity_id
      JOIN categories c ON c.id = o.category_id
-    WHERE sv.user_id = $1
+    WHERE sv.user_id = $1 AND o.is_demo = FALSE
     ORDER BY sv.saved_at DESC`,
     [req.user.id]
   );
@@ -49,7 +50,7 @@ export const listSaved = asyncHandler(async (req, res) => {
 export const saveOpportunity = asyncHandler(async (req, res) => {
   const opportunityId = Number(req.params.id);
 
-  const exists = await query('SELECT id FROM opportunities WHERE id = $1', [opportunityId]);
+  const exists = await query('SELECT id FROM opportunities WHERE id = $1 AND is_demo = FALSE', [opportunityId]);
   if (!exists.rows.length) throw ApiError.notFound('That opportunity could not be found.');
 
   const inserted = await withTransaction(async (client) => {

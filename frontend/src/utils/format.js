@@ -18,6 +18,14 @@ export function formatLongDate(value) {
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+export function formatDeadline(value) {
+  if (!value || Number.isNaN(new Date(value).getTime())) return 'Check closing date on source website';
+  if (!String(value).includes('T')) return formatLongDate(value);
+  return new Date(value).toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata',
+  }) + ' IST';
+}
+
 /**
  * Whole days from today until a deadline.
  * Both dates are reduced to midnight so "tomorrow" is always 1, never 0.9.
@@ -42,7 +50,8 @@ export function daysUntil(value) {
  */
 export function deadlineLabel(value) {
   const days = daysUntil(value);
-  if (days === null) return '';
+  if (days === null) return 'Check deadline';
+  if (String(value).includes('T') && new Date(value).getTime() <= Date.now()) return 'Closed';
   if (days < 0) return 'Closed';
   if (days === 0) return 'Closes today';
   if (days === 1) return '1 day left';

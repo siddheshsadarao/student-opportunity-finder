@@ -7,7 +7,7 @@
       name="description"
       content="Student Opportunity Finder - discover internships, scholarships, hackathons, competitions and courses matched to your skills and interests."
     />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/png" href="/brand-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,7 +17,7 @@
     <title>Student Opportunity Finder</title>
     <script>
       try {
-        const saved = localStorage.getItem('sof_theme') || 'system';
+        const saved = localStorage.getItem('sof_theme') || 'light';
         const dark = saved === 'dark' || (saved === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.classList.toggle('dark', dark);
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';

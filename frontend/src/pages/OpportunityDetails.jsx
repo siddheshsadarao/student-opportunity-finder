@@ -34,7 +34,7 @@ import {
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { formatLongDate, deadlineLabel, deadlineTone, matchTone } from '../utils/format';
+import { formatLongDate, formatDeadline, deadlineLabel, deadlineTone, matchTone } from '../utils/format';
 import { getCategoryColor, APPLICATION_STATUSES } from '../utils/constants';
 
 /** One labelled fact in the sidebar. */
@@ -163,7 +163,7 @@ export default function OpportunityDetails() {
   if (!opportunity) return null;
 
   const colors = getCategoryColor(opportunity.category?.color);
-  const closed = deadlineLabel(opportunity.deadline) === 'Closed';
+  const closed = !opportunity.isActive || deadlineLabel(opportunity.deadline) === 'Closed';
 
   return (
     <div className={isAuthenticated ? '' : 'min-h-screen bg-slate-50 px-4 py-8'}>
@@ -225,9 +225,11 @@ export default function OpportunityDetails() {
               <p className="mt-1 text-slate-600">{opportunity.organization}</p>
 
               <p className={`mt-3 text-sm font-medium ${deadlineTone(opportunity.deadline)}`}>
-                Application deadline: {formatLongDate(opportunity.deadline)} &middot;{' '}
-                {deadlineLabel(opportunity.deadline)}
+                {opportunity.deadline ? <>Application deadline: {formatDeadline(opportunity.deadline)} &middot; {deadlineLabel(opportunity.deadline)}</> : 'Check the source website for the closing date.'}
               </p>
+              {opportunity.lastCheckedAt && (
+                <p className="mt-1 text-xs text-slate-500">Source checked: {formatDeadline(opportunity.lastCheckedAt)}</p>
+              )}
             </div>
           </div>
 
@@ -377,7 +379,7 @@ export default function OpportunityDetails() {
               <Fact
                 icon={CalendarDays}
                 label="Deadline"
-                value={formatLongDate(opportunity.deadline)}
+                value={formatDeadline(opportunity.deadline)}
               />
               <Fact icon={Link2} label="Source" value={opportunity.source} />
             </div>

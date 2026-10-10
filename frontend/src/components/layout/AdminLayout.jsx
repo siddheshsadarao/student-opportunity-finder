@@ -24,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Avatar } from '../ui';
 import { useTheme } from '../../context/ThemeContext';
+import Brand from '../Brand';
 
 const LINKS = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -66,10 +67,7 @@ export default function AdminLayout() {
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-5">
           <Link to="/admin" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-              <ShieldCheck className="h-4.5 w-4.5 text-white" />
-            </div>
-            <span className="text-sm font-bold text-white">Admin Panel</span>
+            <Brand compact inverse />
           </Link>
           <button
             type="button"

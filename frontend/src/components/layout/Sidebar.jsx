@@ -20,8 +20,8 @@ import {
   User,
   Settings,
   X,
-  GraduationCap as Logo,
 } from 'lucide-react';
+import Brand from '../Brand';
 
 const MAIN_LINKS = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -91,10 +91,7 @@ export default function Sidebar({ open, onClose }) {
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-5">
           <Link to="/dashboard" className="flex items-center gap-2.5" onClick={onClose}>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-              <Logo className="h-4.5 w-4.5 text-white" />
-            </div>
-            <span className="text-sm font-bold text-slate-900">Opportunity Finder</span>
+            <Brand compact />
           </Link>
 
           <button
@@ -118,8 +115,6 @@ export default function Sidebar({ open, onClose }) {
         <div className="border-t border-slate-100 p-3">
           <p className="px-3 text-xs text-slate-400">
             Student Opportunity Finder
-            <br />
-            Semester project &middot; v1.0
           </p>
         </div>
       </aside>

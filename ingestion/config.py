@@ -119,6 +119,21 @@ GREENHOUSE_COMPANIES: list[dict] = [
     {"token": "gitlab", "name": "GitLab"},
     {"token": "airbnb", "name": "Airbnb"},
     {"token": "reddit", "name": "Reddit"},
+    {"token": "cloudflare", "name": "Cloudflare"},
+    {"token": "mongodb", "name": "MongoDB"},
+    {"token": "coinbase", "name": "Coinbase"},
+    {"token": "robinhood", "name": "Robinhood"},
+    {"token": "duolingo", "name": "Duolingo"},
+    {"token": "lyft", "name": "Lyft"},
+    {"token": "doordashusa", "name": "DoorDash"},
+    {"token": "affirm", "name": "Affirm"},
+    {"token": "pinterest", "name": "Pinterest"},
+    {"token": "samsara", "name": "Samsara"},
+    {"token": "okta", "name": "Okta"},
+    {"token": "rubrik", "name": "Rubrik"},
+    {"token": "sentinellabs", "name": "SentinelOne"},
+    {"token": "gusto", "name": "Gusto"},
+    {"token": "scaleai", "name": "Scale AI"},
 ]
 
 

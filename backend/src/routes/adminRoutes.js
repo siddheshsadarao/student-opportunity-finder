@@ -19,6 +19,9 @@ router.get('/analytics', admin.getAnalytics);
 
 // Students
 router.get('/students', admin.listStudents);
+router.get('/students/:id/resume', idParamRule, validate, admin.downloadStudentResume);
+router.patch('/students/:id/status', idParamRule, validate, admin.setStudentStatus);
+router.delete('/students/:id', idParamRule, validate, admin.deleteStudent);
 
 // Opportunities
 router.get('/opportunities', admin.listAllOpportunities);

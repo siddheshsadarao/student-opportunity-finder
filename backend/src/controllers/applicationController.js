@@ -24,7 +24,8 @@ const APPLICATION_SELECT = `
     a.created_at AS tracked_at, a.updated_at AS status_updated_at,
     o.id, o.title, o.organization, o.organization_logo, o.description,
     o.eligibility, o.benefits, o.location, o.mode, o.duration, o.stipend,
-    o.deadline, o.application_url, o.source, o.is_demo, o.is_active,
+    o.deadline, o.deadline_at, o.ingested_at, sof_is_open(o) AS is_open,
+    o.application_url, o.source, o.is_demo, o.is_active,
     o.views_count, o.saves_count, o.created_at,
     c.id AS category_id, c.name AS category_name, c.slug AS category_slug,
     c.icon AS category_icon, c.color AS category_color,
@@ -60,7 +61,7 @@ function mapApplication(row) {
 /** GET /api/applications -- all tracked applications, grouped by status. */
 export const listApplications = asyncHandler(async (req, res) => {
   const { rows } = await query(
-    `${APPLICATION_SELECT} WHERE a.user_id = $1 ORDER BY a.updated_at DESC`,
+    `${APPLICATION_SELECT} WHERE a.user_id = $1 AND o.is_demo = FALSE ORDER BY a.updated_at DESC`,
     [req.user.id]
   );
 
@@ -92,7 +93,7 @@ export const trackApplication = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Invalid application status.');
   }
 
-  const exists = await query('SELECT id FROM opportunities WHERE id = $1', [opportunityId]);
+  const exists = await query('SELECT id FROM opportunities WHERE id = $1 AND is_demo = FALSE', [opportunityId]);
   if (!exists.rows.length) throw ApiError.notFound('That opportunity could not be found.');
 
   // "applied_on" is filled the first time the status becomes Applied or later.

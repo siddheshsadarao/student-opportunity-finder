@@ -23,6 +23,7 @@ import recommendationRoutes from './recommendationRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
 import adminRoutes from './adminRoutes.js';
 import metaRoutes from './metaRoutes.js';
+import assistantRoutes from './assistantRoutes.js';
 
 import { protect } from '../middleware/auth.js';
 import { getDashboard } from '../controllers/recommendationController.js';
@@ -36,6 +37,7 @@ router.get('/health', (req, res) =>
 router.use('/auth', authRoutes);
 router.use('/profile', profileRoutes);
 router.use('/opportunities', opportunityRoutes);
+router.use('/assistant', assistantRoutes);
 router.use('/saved', savedRoutes);
 router.use('/applications', applicationRoutes);
 router.use('/recommendations', recommendationRoutes);

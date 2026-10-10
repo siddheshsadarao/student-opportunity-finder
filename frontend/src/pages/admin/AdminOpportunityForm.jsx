@@ -430,29 +430,6 @@ export default function AdminOpportunityForm() {
             </span>
           </label>
 
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={form.isDemo}
-              onChange={(event) => set('isDemo', event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-            />
-            <span>
-              <span className="block text-sm font-medium text-slate-900">
-                Mark as sample / demo data
-              </span>
-              <span className="text-xs text-slate-500">
-                Adds a &ldquo;Sample&rdquo; badge so nobody mistakes a fictional listing for a real
-                one.
-              </span>
-            </span>
-          </label>
-
-          <p className="flex items-start gap-2 rounded-lg bg-slate-50 px-3.5 py-3 text-xs leading-relaxed text-slate-500">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Only tick &ldquo;sample&rdquo; for listings you invented for a demo. Real opportunities
-            should be left unticked so students can trust them.
-          </p>
         </section>
 
         {/* ---------------------------------------------------- actions */}

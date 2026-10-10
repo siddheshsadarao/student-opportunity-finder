@@ -13,6 +13,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
 import { PageLoader } from './components/ui';
+import OpportunityAssistant from './components/OpportunityAssistant';
 
 const StudentLayout = lazy(() => import('./components/layout/StudentLayout'));
 const AdminLayout = lazy(() => import('./components/layout/AdminLayout'));
@@ -95,6 +96,7 @@ function GuestRoute({ children }) {
 export default function App() {
   return (
     <Suspense fallback={<PageLoader label="Loading page..." />}>
+    <OpportunityAssistant />
     <Routes>
       {/* ------------------------------------------------------- public */}
       <Route path="/" element={<Landing />} />

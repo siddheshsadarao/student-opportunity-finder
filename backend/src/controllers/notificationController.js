@@ -27,7 +27,7 @@ async function generateDeadlineNotifications(userId) {
        JOIN opportunities o ON o.id = sv.opportunity_id
       WHERE sv.user_id = $1
         AND o.is_active = TRUE
-        AND o.deadline BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'
+        AND sof_is_open(o) AND o.deadline BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'
         -- Do not create the same reminder twice.
         AND NOT EXISTS (
               SELECT 1 FROM notifications n

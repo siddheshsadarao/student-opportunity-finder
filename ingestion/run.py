@@ -19,6 +19,8 @@ from __future__ import annotations
 import argparse
 import sys
 import traceback
+import os
+from pathlib import Path
 
 from .common import PoliteSession
 from .config import SOURCE_PAGE_LIMITS, settings
@@ -28,6 +30,7 @@ from .store import (
     finish_run,
     get_enabled_sources,
     save_opportunities,
+    reconcile_completed_boards,
     start_run,
 )
 
@@ -79,7 +82,7 @@ def run_source(
     fetcher = ADAPTERS.get(source_key)
     if fetcher is None:
         print(f"  ! no adapter named '{source_key}'")
-        return RunStats()
+        return RunStats(failed=True)
 
     print(f"\n=== {source_key} ===")
     run_id = None if dry_run else start_run(source_key)
@@ -101,11 +104,16 @@ def run_source(
                 )
             if len(items) > 5:
                 print(f"    ... and {len(items) - 5} more")
-            return RunStats(fetched=len(items))
+            return RunStats(fetched=len(items), failed=bool(session.board_errors))
 
         stats = save_opportunities(items, auto_approve=auto_approve)
+        removed = reconcile_completed_boards(source_key, session.completed_boards, items)
+        if removed:
+            print(f'  hidden {removed} removed employer listing(s)')
         print(f"  {stats}")
-        finish_run(run_id, source_key, stats)
+        if session.board_errors:
+            stats.failed = True
+        finish_run(run_id, source_key, stats, error='; '.join(session.board_errors)[:500] or None)
         return stats
 
     except PermissionError as error:
@@ -113,14 +121,14 @@ def run_source(
         print(f"  ! access refused: {error}")
         if run_id:
             finish_run(run_id, source_key, RunStats(), error=str(error))
-        return RunStats()
+        return RunStats(failed=True)
 
     except Exception as error:  # noqa: BLE001 - one bad source must not stop the rest
         print(f"  ! failed: {error}")
         traceback.print_exc(limit=2)
         if run_id:
             finish_run(run_id, source_key, RunStats(), error=str(error)[:500])
-        return RunStats()
+        return RunStats(failed=True)
 
 
 def main() -> int:
@@ -147,7 +155,10 @@ def main() -> int:
         return 0
 
     try:
-        sources = get_enabled_sources()
+        if args.dry_run and args.source in ADAPTERS:
+            sources = [{'key': args.source, 'auto_approve': True, 'rate_limit_secs': 1}]
+        else:
+            sources = get_enabled_sources()
     except Exception as error:  # noqa: BLE001
         print(f"Cannot reach the database: {error}")
         print("Check ingestion/.env, and that PostgreSQL is running.")
@@ -176,14 +187,28 @@ def main() -> int:
         total.created += stats.created
         total.updated += stats.updated
         total.skipped += stats.skipped
+        total.failed = total.failed or stats.failed
 
     if not args.dry_run:
         expired = expire_old_opportunities()
         print(f"\nExpired {expired} past-deadline listing(s).")
 
     print(f"\nTOTAL: {total}")
-    return 0
+    return 1 if total.failed else 0
+
+
+def run_locked() -> int:
+    if os.name != 'posix':
+        return main()
+    import fcntl
+    with Path(__file__).with_name('.run.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print('Another import is running; skipped overlapping run.')
+            return 0
+        return main()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_locked())

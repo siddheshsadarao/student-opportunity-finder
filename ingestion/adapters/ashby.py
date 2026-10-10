@@ -15,8 +15,6 @@ Add or remove boards in ingestion/config.py.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
-
 from ..common import (
     NormalisedOpportunity,
     PoliteSession,
@@ -25,16 +23,12 @@ from ..common import (
     detect_skills,
     looks_like_student_opportunity,
     parse_iso_date,
+    job_category,
 )
 from ..config import ASHBY_COMPANIES
 
 SOURCE_KEY = "ashby"
 API_URL = "https://api.ashbyhq.com/posting-api/job-board/{board}"
-
-# Ashby boards rarely publish a closing date, so we show a rolling window and
-# say so in the description rather than inventing a specific deadline.
-DEFAULT_WINDOW_DAYS = 45
-
 
 def fetch(session: PoliteSession, max_pages: int = 1) -> list[NormalisedOpportunity]:
     results: list[NormalisedOpportunity] = []
@@ -50,18 +44,25 @@ def fetch(session: PoliteSession, max_pages: int = 1) -> list[NormalisedOpportun
             )
         except Exception as error:  # noqa: BLE001 - one bad board must not stop the rest
             print(f"  [ashby] skipping {board}: {error}")
+            session.board_errors.append(f'{board}: {str(error)[:180]}')
             continue
 
         company_name = company.get("name") or board.title()
+        if not isinstance(payload, dict) or not isinstance(payload.get('jobs'), list):
+            raise ValueError(f'Invalid Ashby response for {board}')
+        session.completed_boards.append(board)
         for job in (payload or {}).get("jobs") or []:
             opportunity = _convert(job, company_name)
             if opportunity:
+                opportunity.source_board = board
                 results.append(opportunity)
 
     return results
 
 
 def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
+    if job.get('isListed') is False:
+        return None
     title = clean_text(job.get("title"))
     source_id = str(job.get("id") or "").strip()
     if not title or not source_id:
@@ -88,9 +89,7 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
     is_remote = bool(job.get("isRemote"))
     mode = "Remote" if is_remote else detect_mode(location, description)
 
-    deadline = parse_iso_date(job.get("closeDate")) or (
-        date.today() + timedelta(days=DEFAULT_WINDOW_DAYS)
-    )
+    deadline = parse_iso_date(job.get("closeDate"))
 
     return NormalisedOpportunity(
         source=SOURCE_KEY,
@@ -98,16 +97,15 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
         title=title,
         organization=company_name,
         description=description,
-        category_slug="internship",
+        category_slug=job_category(title),
         application_url=apply_url,
         source_url=apply_url,
         deadline=deadline,
-        start_date=parse_iso_date(job.get("publishedAt")),
         location=location,
         mode=mode,
         prize=None,
         eligibility="See the official listing for eligibility and work authorisation requirements.",
-        benefits="Paid role. Benefits are listed on the company's application page.",
+        benefits="Compensation and benefits are listed on the employer's application page.",
         duration=clean_text(job.get("employmentType")) or None,
         skills=detect_skills(title, description),
         organization_logo=None,

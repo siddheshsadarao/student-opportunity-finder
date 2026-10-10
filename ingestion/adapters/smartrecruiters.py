@@ -1,14 +1,11 @@
 """Student roles from SmartRecruiters' public company postings API."""
 from __future__ import annotations
 
-from datetime import date, timedelta
-
-from ..common import NormalisedOpportunity, PoliteSession, clean_text, detect_mode, detect_skills, looks_like_student_opportunity
+from ..common import NormalisedOpportunity, PoliteSession, clean_text, detect_mode, detect_skills, looks_like_student_opportunity, job_category
 from ..config import SMARTRECRUITERS_COMPANIES
 
 SOURCE_KEY = "smartrecruiters"
 API_URL = "https://api.smartrecruiters.com/v1/companies/{company}/postings"
-DEFAULT_WINDOW_DAYS = 45
 
 
 def fetch(session: PoliteSession, max_pages: int = 2) -> list[NormalisedOpportunity]:
@@ -22,14 +19,19 @@ def fetch(session: PoliteSession, max_pages: int = 2) -> list[NormalisedOpportun
                 ) or {}
             except Exception as error:
                 print(f"  [smartrecruiters] skipping {board['company']}: {error}")
+                session.board_errors.append(f"{board['company']}: {str(error)[:180]}")
                 break
 
+            if not isinstance(payload, dict) or not isinstance(payload.get('content'), list):
+                raise ValueError(f"Invalid SmartRecruiters response for {board['company']}")
             content = payload.get("content") or []
             for job in content:
                 item = _convert(job, board["name"])
                 if item:
+                    item.source_board = board['company']
                     results.append(item)
             if len(content) < 100:
+                session.completed_boards.append(board['company'])
                 break
     return results
 
@@ -45,6 +47,8 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
         ", ".join(filter(None, [location_data.get("city"), location_data.get("region"), location_data.get("country")]))
     ) or "Not specified"
     company_key = (job.get("company") or {}).get("identifier")
+    if not company_key:
+        return None
     ref = f"https://jobs.smartrecruiters.com/{company_key}/{source_id}"
     department = clean_text(
         (job.get("department") or {}).get("label")
@@ -65,10 +69,10 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
         title=title,
         organization=company_name,
         description=description,
-        category_slug="internship",
+        category_slug=job_category(title),
         application_url=ref,
         source_url=ref,
-        deadline=date.today() + timedelta(days=DEFAULT_WINDOW_DAYS),
+        deadline=None,
         location=location,
         mode=mode,
         eligibility="Student or early-career opening. Check the official posting for degree and location requirements.",

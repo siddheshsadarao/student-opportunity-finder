@@ -18,6 +18,7 @@ from ..common import (
     detect_skills,
     is_usable_deadline,
     parse_iso_date,
+    parse_deadline_timestamp,
 )
 
 SOURCE_KEY = "devfolio"
@@ -58,7 +59,7 @@ def _convert(item: dict) -> NormalisedOpportunity | None:
     setting = item.get("hackathon_setting") or {}
     # The registration close date is what matters to a student; fall back to
     # the hackathon end date if it is missing.
-    deadline = parse_iso_date(setting.get("reg_ends_at")) or parse_iso_date(item.get("ends_at"))
+    deadline = parse_iso_date(setting.get("reg_ends_at"))
     if not is_usable_deadline(deadline):
         return None
 
@@ -110,6 +111,7 @@ def _convert(item: dict) -> NormalisedOpportunity | None:
         application_url=apply_url,
         source_url=apply_url,
         deadline=deadline,
+        deadline_at=parse_deadline_timestamp(setting.get('reg_ends_at')),
         start_date=parse_iso_date(item.get("starts_at")),
         end_date=parse_iso_date(item.get("ends_at")),
         location=location,

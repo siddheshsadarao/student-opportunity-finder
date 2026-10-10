@@ -1,15 +1,11 @@
 /**
  * Forgot / reset password.
  *
- * A production app would email a one-time reset link. Sending email needs an
- * SMTP account, which is outside the scope of this semester project, so this
- * screen offers a direct reset for student accounts instead. The backend
- * always replies with the same message, so this page cannot be used to find
- * out which email addresses are registered.
+ * A short-lived email OTP proves ownership before a password can be changed.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Mail, KeyRound, CheckCircle2, Send } from 'lucide-react';
 import AuthShell from './AuthShell';
 import { PasswordInput, Spinner } from '../../components/ui';
 import { authApi } from '../../services/api';
@@ -20,6 +16,7 @@ export default function ForgotPassword() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [codeRequested, setCodeRequested] = useState(false);
   const toast = useToast();
 
   const onChange = (event) => {
@@ -31,11 +28,12 @@ export default function ForgotPassword() {
   const validate = () => {
     const found = {};
     if (!/^\S+@\S+\.\S+$/.test(form.email)) found.email = 'Enter a valid email address.';
-    if (form.newPassword.length < 8) found.newPassword = 'Use at least 8 characters.';
-    else if (!/[A-Za-z]/.test(form.newPassword)) found.newPassword = 'Include at least one letter.';
-    else if (!/\d/.test(form.newPassword)) found.newPassword = 'Include at least one number.';
-    if (form.newPassword !== form.confirmPassword) {
-      found.confirmPassword = 'Passwords do not match.';
+    if (codeRequested) {
+      if (!/^\d{6}$/.test(form.code || '')) found.code = 'Enter the 6-digit code from your email.';
+      if (form.newPassword.length < 8) found.newPassword = 'Use at least 8 characters.';
+      else if (!/[A-Za-z]/.test(form.newPassword)) found.newPassword = 'Include at least one letter.';
+      else if (!/\d/.test(form.newPassword)) found.newPassword = 'Include at least one number.';
+      if (form.newPassword !== form.confirmPassword) found.confirmPassword = 'Passwords do not match.';
     }
     setErrors(found);
     return Object.keys(found).length === 0;
@@ -47,8 +45,14 @@ export default function ForgotPassword() {
 
     setSubmitting(true);
     try {
-      await authApi.resetPassword({ email: form.email, newPassword: form.newPassword });
-      setDone(true);
+      if (!codeRequested) {
+        await authApi.forgotPassword({ email: form.email });
+        setCodeRequested(true);
+        toast.success('If the account is eligible, a reset code has been sent.');
+      } else {
+        await authApi.resetPassword({ email: form.email, code: form.code, newPassword: form.newPassword });
+        setDone(true);
+      }
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -58,12 +62,11 @@ export default function ForgotPassword() {
 
   if (done) {
     return (
-      <AuthShell title="Password reset requested">
+      <AuthShell title="Password reset complete">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
           <CheckCircle2 className="h-6 w-6 text-emerald-600" />
           <p className="mt-3 text-sm text-emerald-900">
-            If a student account exists for <strong>{form.email}</strong>, its password has been
-            reset. You can now log in with your new password.
+            Your password has been reset for <strong>{form.email}</strong>. You can now log in with your new password.
           </p>
         </div>
         <Link to="/login" className="btn-primary mt-6 w-full">
@@ -76,7 +79,7 @@ export default function ForgotPassword() {
   return (
     <AuthShell
       title="Reset your password"
-      subtitle="Enter your email and choose a new password."
+      subtitle={codeRequested ? 'Enter the code from your email and choose a new password.' : 'We will send a one-time code to your email.'}
       footer={
         <>
           Remembered it?{' '}
@@ -106,6 +109,13 @@ export default function ForgotPassword() {
           {errors.email && <p className="field-error">{errors.email}</p>}
         </div>
 
+        {codeRequested && <div>
+          <label htmlFor="reset-code" className="label">6-digit email code</label>
+          <input id="reset-code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={form.code || ''} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 6) }))} className={`input text-center tracking-widest ${errors.code ? 'input-error' : ''}`} placeholder="000000" />
+          {errors.code && <p className="field-error">{errors.code}</p>}
+        </div>}
+
+        {codeRequested && <>
         <div>
           <label htmlFor="new-password" className="label">
             New password
@@ -137,18 +147,14 @@ export default function ForgotPassword() {
           />
           {errors.confirmPassword && <p className="field-error">{errors.confirmPassword}</p>}
         </div>
+        </>}
 
         <button type="submit" className="btn-primary w-full" disabled={submitting}>
-          {submitting ? <Spinner className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
-          {submitting ? 'Resetting...' : 'Reset password'}
+          {submitting ? <Spinner className="h-4 w-4" /> : codeRequested ? <KeyRound className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+          {submitting ? 'Please wait...' : codeRequested ? 'Reset password' : 'Send reset code'}
         </button>
+        {codeRequested && <button type="button" onClick={async () => { try { await authApi.forgotPassword({ email: form.email }); toast.success('If the account is eligible, a fresh reset code has been sent.'); } catch (error) { toast.error(error.message); } }} className="w-full py-2 text-sm font-medium text-primary-600 hover:underline">Resend code</button>}
       </form>
-
-      <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
-        <strong className="text-slate-700">Note for evaluators:</strong> a production build would
-        email a time-limited reset link. Email delivery was kept out of scope for this project, so
-        the reset is performed directly here. It only works for student accounts.
-      </p>
     </AuthShell>
   );
 }

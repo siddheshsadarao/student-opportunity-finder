@@ -1,8 +1,6 @@
 """Student roles from Lever's documented public Postings API."""
 from __future__ import annotations
 
-from datetime import date, timedelta
-
 from ..common import (
     NormalisedOpportunity,
     PoliteSession,
@@ -10,12 +8,12 @@ from ..common import (
     detect_mode,
     detect_skills,
     looks_like_student_opportunity,
+    job_category,
 )
 from ..config import LEVER_COMPANIES
 
 SOURCE_KEY = "lever"
 API_URL = "https://api.lever.co/v0/postings/{board}"
-DEFAULT_WINDOW_DAYS = 45
 
 
 def fetch(session: PoliteSession, max_pages: int = 1) -> list[NormalisedOpportunity]:
@@ -23,14 +21,19 @@ def fetch(session: PoliteSession, max_pages: int = 1) -> list[NormalisedOpportun
     for company in LEVER_COMPANIES:
         board = company["board"]
         try:
-            jobs = session.get_json(API_URL.format(board=board), params={"mode": "json"}) or []
+            jobs = session.get_json(API_URL.format(board=board), params={"mode": "json"})
         except Exception as error:  # one company board must not stop the run
             print(f"  [lever] skipping {board}: {error}")
+            session.board_errors.append(f'{board}: {str(error)[:180]}')
             continue
 
+        if not isinstance(jobs, list):
+            raise ValueError(f'Invalid Lever response for {board}')
+        session.completed_boards.append(board)
         for job in jobs:
             item = _convert(job, company["name"])
             if item:
+                item.source_board = board
                 results.append(item)
     return results
 
@@ -61,10 +64,10 @@ def _convert(job: dict, company_name: str) -> NormalisedOpportunity | None:
         title=title,
         organization=company_name,
         description=description or f"{title} at {company_name}. See the official role page for details.",
-        category_slug="internship",
+        category_slug=job_category(title),
         application_url=hosted_url,
         source_url=hosted_url,
-        deadline=date.today() + timedelta(days=DEFAULT_WINDOW_DAYS),
+        deadline=None,
         location=location,
         mode=detect_mode(job.get("workplaceType", ""), location, description),
         eligibility="Student, intern, graduate or early-career role. Check the official listing for exact requirements.",

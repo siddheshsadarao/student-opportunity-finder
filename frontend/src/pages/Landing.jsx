@@ -7,7 +7,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  GraduationCap,
   Search,
   ArrowRight,
   Menu,
@@ -22,6 +21,7 @@ import {
   Compass,
   Moon,
   Sun,
+  Mail,
 } from 'lucide-react';
 import { metaApi, opportunityApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +29,7 @@ import { formatDate, deadlineLabel, deadlineTone } from '../utils/format';
 import { getCategoryColor } from '../utils/constants';
 import { useTheme } from '../context/ThemeContext';
 import { getCategoryIcon } from '../utils/iconMap';
+import Brand from '../components/Brand';
 
 const HOW_IT_WORKS = [
   {
@@ -94,7 +95,7 @@ export default function Landing() {
   useEffect(() => {
     // All three are optional -- the page renders fine if any fails.
     metaApi.categories().then(setCategories).catch(() => {});
-    opportunityApi.featured().then(setFeatured).catch(() => {});
+    opportunityApi.featured().then((items) => setFeatured(items.filter((item) => !item.isDemo))).catch(() => {});
     metaApi.stats().then(setStats).catch(() => {});
   }, []);
 
@@ -115,10 +116,7 @@ export default function Landing() {
       <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur">
         <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600">
-              <GraduationCap className="h-5 w-5 text-white" />
-            </div>
-            <span className="font-bold text-slate-900">Opportunity Finder</span>
+            <Brand compact />
           </Link>
 
           <div className="hidden items-center gap-7 md:flex">
@@ -354,11 +352,6 @@ export default function Landing() {
                       {opportunity.category?.name}
                     </span>
                     <span className="badge bg-slate-100 text-slate-600">{opportunity.mode}</span>
-                    {opportunity.isDemo && (
-                      <span className="badge border border-amber-200 bg-amber-50 text-amber-700">
-                        Sample
-                      </span>
-                    )}
                   </div>
 
                   <h3 className="mt-3 line-clamp-2 font-semibold text-slate-900">
@@ -470,15 +463,16 @@ export default function Landing() {
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             <div className="lg:col-span-2">
               <Link to="/" className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600">
-                  <GraduationCap className="h-5 w-5 text-white" />
-                </div>
-                <span className="font-bold text-slate-900">Student Opportunity Finder</span>
+                <Brand compact />
               </Link>
               <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-500">
-                A semester project that centralises student opportunities and recommends the most
-                relevant ones using a content-based recommendation engine.
+                Discover opportunities for your next step, from internships and scholarships to
+                hackathons and competitions.
               </p>
+              <div className="mt-4">
+                <a href="mailto:studentopportunityfinder@gmail.com" className="btn-secondary btn-sm"><Mail className="h-4 w-4" /> Contact us</a>
+                <p className="mt-2 max-w-full break-all text-sm text-slate-600">studentopportunityfinder@gmail.com</p>
+              </div>
             </div>
 
             <div>
@@ -526,10 +520,7 @@ export default function Landing() {
 
           <div className="mt-10 flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-slate-400">
-              Student Opportunity Finder &mdash; B.Tech Data Science semester project.
-            </p>
-            <p className="text-xs text-slate-400">
-              Demo listings are fictional and marked &ldquo;Sample&rdquo;.
+              Student Opportunity Finder
             </p>
           </div>
         </div>

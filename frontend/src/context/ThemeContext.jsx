@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-// Versioned so visitors who inherited the old system-based default start in light mode.
-const STORAGE_KEY = 'sof_theme_v2';
+const STORAGE_KEY = 'sof_theme';
 const ThemeContext = createContext(null);
 
 function resolveTheme(preference) {

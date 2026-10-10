@@ -72,8 +72,8 @@ The token is returned by `/auth/login`, `/auth/register` and `/auth/admin/login`
 
 ### `POST /auth/register` — Public
 
-Creates a student account plus an (initially sparse) profile, and returns a token
-so the user can go straight to onboarding.
+Creates a pending student account and sends a 6-digit email code. A session is
+issued only after `/auth/verify-email` succeeds.
 
 **Request**
 
@@ -100,14 +100,30 @@ Password rules: at least 8 characters, containing a letter and a number.
 {
   "success": true,
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user": { "id": 4, "name": "Rahul Menon", "email": "rahul@student.com", "role": "student", "avatarUrl": null },
-    "onboardingDone": false
+    "verificationRequired": true,
+    "verificationSent": true,
+    "email": "rahul@student.com"
   }
 }
 ```
 
 **Errors** — `409` if the email is already registered, `400` for validation.
+
+### `POST /auth/verify-email` — Public
+
+Request: `{ "email": "rahul@student.com", "code": "123456" }`. A valid
+single-use code expires after 10 minutes; five invalid attempts require a new
+code. Success returns the JWT and onboarding state.
+
+### `POST /auth/resend-verification` — Public
+
+Request: `{ "email": "rahul@student.com" }`. Rate limited with other auth routes.
+
+### `POST /auth/forgot-password` and `POST /auth/reset-password` — Public
+
+The first sends an email code to a verified student account. The second accepts
+`{ "email", "code", "newPassword" }`; the code expires after 10 minutes and is
+single use. Unknown addresses get a generic response.
 
 ---
 
@@ -201,6 +217,8 @@ cannot be taken over this way. Always returns the same generic message.
 | `location` | string | Partial match |
 | `mode` | string | `Remote` \| `Hybrid` \| `On-site` |
 | `organization` | string | Partial match |
+| `eligibility` | string | Partial match against the eligibility text |
+| `source` | string | Exact source id/name |
 | `deadlineBefore` | date | `YYYY-MM-DD` |
 | `includeExpired` | boolean | `true` to include past deadlines (default: hidden) |
 | `sort` | string | `relevant` \| `newest` \| `deadline` \| `popular` |
@@ -235,7 +253,7 @@ GET /api/opportunities?search=data&category=internship&skills=Python,SQL&sort=de
         "deadline": "2026-10-05",
         "applicationUrl": "https://example.com/vector-analytics/summer-internship",
         "source": "Vector Analytics campus programme (sample)",
-        "isDemo": true,
+        "isDemo": false,
         "isActive": true,
         "viewsCount": 143,
         "savesCount": 12,
@@ -273,11 +291,21 @@ Everything the Discover sidebar needs.
     "skills": ["Python", "Communication", "Problem Solving"],
     "locations": ["Bengaluru", "Chennai", "Delhi", "Remote"],
     "organizations": ["Nimbus AI Labs", "Vector Analytics"],
+    "sources": ["devpost", "unstop"],
     "modes": ["Remote", "Hybrid", "On-site"],
     "sortOptions": [{ "value": "relevant", "label": "Most Relevant" }]
   }
 }
 ```
+
+### `POST /api/assistant/search` — Public
+
+Accepts `{ "message": "remote Python internship in Pune this week" }` and
+returns parsed filters plus up to six currently open, non-demo catalogue
+listings with source and official application URL. When `GEMINI_API_KEY` is
+configured, Gemini extracts bounded filters; otherwise a local parser is used.
+The model does not create opportunity records. Only the search sentence is sent
+to Gemini; profile and resume data are not sent.
 
 ### `GET /opportunities/calendar` — Public+
 
@@ -325,6 +353,7 @@ used its built-in JavaScript scorer.
     "name": "Aarav Mehta", "email": "demo.student@example.com",
     "college": "Sinhgad Institute of Technology",
     "degree": "B.Tech", "branch": "Data Science", "year": 3, "city": "Pune",
+    "phone": null, "hasResume": false, "resumeOriginalName": null,
     "careerGoal": "Data Scientist",
     "preferredMode": "Remote", "preferredLocation": "Pune",
     "bio": "Third year Data Science student…",
@@ -356,6 +385,11 @@ All fields optional — a partial update leaves the others untouched. Sending a
 
 Skills and interests that do not exist yet are created automatically, matched on a
 slug so `Node.JS` and `node js` resolve to the same row.
+
+`phone` is optional and displayed as **not verified** until an SMS provider is
+configured. Resume files are private: `POST /profile/resume` accepts PDF/DOCX up
+to 5 MB, `GET /profile/resume` downloads the logged-in student's file, and
+`DELETE /profile/resume` removes it.
 
 ### `POST /profile/onboarding`
 

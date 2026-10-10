@@ -40,7 +40,7 @@ class NormalisedOpportunity:
     description: str
     category_slug: str               # must match a row in our categories table
     application_url: str
-    deadline: date
+    deadline: date | None
 
     source_url: str | None = None
     location: str = "Online"
@@ -53,6 +53,8 @@ class NormalisedOpportunity:
     end_date: date | None = None
     skills: list[str] = field(default_factory=list)
     organization_logo: str | None = None
+    deadline_at: datetime | None = None
+    source_board: str | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -84,6 +86,8 @@ class PoliteSession:
         )
         self.rate_limit = rate_limit or settings.DEFAULT_RATE_LIMIT
         self._last_request_at = 0.0
+        self.completed_boards: list[str] = []
+        self.board_errors: list[str] = []
 
     def _wait(self) -> None:
         elapsed = time.monotonic() - self._last_request_at
@@ -173,6 +177,30 @@ def clean_text(value: str | None, limit: int | None = None) -> str:
 # ---------------------------------------------------------------------------
 # Dates
 # ---------------------------------------------------------------------------
+def parse_deadline_timestamp(value, default_timezone=None) -> datetime | None:
+    """Keep real cutoff times; never invent a time or timezone for date-only feeds."""
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            return None
+    if not value or len(str(value).strip()) <= 10:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace('Z', '+00:00'))
+        if parsed.tzinfo is None:
+            if default_timezone is None:
+                return None
+            parsed = parsed.replace(tzinfo=default_timezone)
+        return parsed.astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def job_category(title: str) -> str:
+    return 'internship' if re.search(r'\b(intern\w*|co-op|apprentice\w*)\b', title, re.I) else 'job'
+
+
 def parse_iso_date(value) -> date | None:
     """Parses '2026-10-01', '2026-10-01T18:30:00+00:00' and unix timestamps."""
     if value in (None, "", "null"):

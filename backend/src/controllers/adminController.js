@@ -8,6 +8,9 @@
 import { query, withTransaction } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { resumeDirectory } from '../middleware/resumeUpload.js';
 import slugify from '../utils/slugify.js';
 import { resolveSkillIds } from '../services/taxonomyService.js';
 import { mapOpportunity } from './opportunityController.js';
@@ -26,7 +29,7 @@ export const listAllOpportunities = asyncHandler(async (req, res) => {
   const { search, category, status, page = 1, limit = 20 } = req.query;
 
   const params = [];
-  const where = [];
+  const where = ['o.is_demo = FALSE'];
 
   if (search) {
     params.push(`%${search}%`);
@@ -36,7 +39,7 @@ export const listAllOpportunities = asyncHandler(async (req, res) => {
     params.push(category);
     where.push(`(c.slug = $${params.length} OR c.id::text = $${params.length})`);
   }
-  if (status === 'active') where.push('o.is_active = TRUE AND o.deadline >= CURRENT_DATE');
+  if (status === 'active') where.push('sof_is_open(o)');
   if (status === 'expired') where.push('o.deadline < CURRENT_DATE');
   if (status === 'inactive') where.push('o.is_active = FALSE');
 
@@ -102,6 +105,7 @@ async function syncOpportunitySkills(client, opportunityId, skills) {
 /** POST /api/admin/opportunities -- create. */
 export const createOpportunity = asyncHandler(async (req, res) => {
   const body = req.body;
+  if (body.isDemo) throw ApiError.badRequest('Only real opportunities can be published.');
 
   const opportunityId = await withTransaction(async (client) => {
     const { rows } = await client.query(
@@ -169,6 +173,7 @@ export const createOpportunity = asyncHandler(async (req, res) => {
 export const updateOpportunity = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const body = req.body;
+  if (body.isDemo) throw ApiError.badRequest('Only real opportunities can be published.');
 
   const exists = await query('SELECT id FROM opportunities WHERE id = $1', [id]);
   if (!exists.rows.length) throw ApiError.notFound('That opportunity could not be found.');
@@ -299,6 +304,10 @@ export const listStudents = asyncHandler(async (req, res) => {
 
   const params = [];
   let where = "WHERE u.role = 'student'";
+  if (req.query.status === 'verified') where += ' AND u.email_verified = TRUE';
+  if (req.query.status === 'pending') where += ' AND u.email_verified = FALSE';
+  if (req.query.status === 'inactive') where += ' AND u.is_active = FALSE';
+  if (req.query.hasResume === 'true') where += ' AND p.resume_storage_name IS NOT NULL';
   if (search) {
     params.push(`%${search}%`);
     where += ` AND (u.name ILIKE $${params.length} OR u.email ILIKE $${params.length}
@@ -316,9 +325,10 @@ export const listStudents = asyncHandler(async (req, res) => {
   params.push(pageSize, (pageNumber - 1) * pageSize);
 
   const { rows } = await query(
-    `SELECT u.id, u.name, u.email, u.created_at, u.is_active,
-            p.college, p.degree, p.branch, p.year, p.city, p.career_goal,
-            p.onboarding_done,
+    `SELECT u.id, u.name, u.email, u.created_at, u.is_active, u.email_verified,
+            p.college, p.degree, p.branch, p.year, p.city, p.state, p.career_goal,
+            p.onboarding_done, p.phone, p.resume_original_name, p.resume_mime_type,
+            (p.resume_storage_name IS NOT NULL) AS has_resume,
             (SELECT COUNT(*)::int FROM saved_opportunities sv WHERE sv.user_id = u.id) AS saved_count,
             (SELECT COUNT(*)::int FROM applications a WHERE a.user_id = u.id) AS application_count,
             COALESCE((SELECT json_agg(s.name) FROM student_skills ss
@@ -346,6 +356,54 @@ export const listStudents = asyncHandler(async (req, res) => {
   });
 });
 
+export const downloadStudentResume = asyncHandler(async (req, res, next) => {
+  const { rows } = await query(
+    `SELECT p.resume_storage_name, p.resume_original_name FROM users u
+       JOIN student_profiles p ON p.user_id = u.id
+      WHERE u.id = $1 AND u.role = 'student'`, [req.params.id]
+  );
+  const profile = rows[0];
+  if (!profile?.resume_storage_name) throw ApiError.notFound('This student has no resume.');
+  res.set('Cache-Control', 'private, no-store');
+  res.download(path.join(resumeDirectory, path.basename(profile.resume_storage_name)),
+    profile.resume_original_name || 'resume', (error) => {
+      if (error && !res.headersSent) next(error.code === 'ENOENT'
+        ? ApiError.notFound('Resume file is unavailable.') : error);
+    });
+});
+
+export const setStudentStatus = asyncHandler(async (req, res) => {
+  if (typeof req.body.isActive !== 'boolean') throw ApiError.badRequest('Choose an account status.');
+  const { rows } = await query(
+    "UPDATE users SET is_active = $1 WHERE id = $2 AND role = 'student' RETURNING id",
+    [req.body.isActive, req.params.id]
+  );
+  if (!rows.length) throw ApiError.notFound('Student not found.');
+  res.json({ success: true, data: { isActive: req.body.isActive } });
+});
+
+export const deleteStudent = asyncHandler(async (req, res) => {
+  const storageName = await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `SELECT u.id, u.email, p.resume_storage_name FROM users u
+         LEFT JOIN student_profiles p ON p.user_id = u.id
+        WHERE u.id = $1 AND u.role = 'student' FOR UPDATE OF u`, [req.params.id]
+    );
+    if (!rows.length) throw ApiError.notFound('Student not found.');
+    if (req.body.confirmEmail !== rows[0].email) throw ApiError.badRequest('Enter the student email to confirm deletion.');
+    await client.query(`UPDATE opportunities SET saves_count = GREATEST(0, saves_count - 1)
+      WHERE id IN (SELECT opportunity_id FROM saved_opportunities WHERE user_id = $1)`, [req.params.id]);
+    await client.query("DELETE FROM users WHERE id = $1 AND role = 'student'", [req.params.id]);
+    return rows[0].resume_storage_name;
+  });
+  if (storageName) {
+    await fs.unlink(path.join(resumeDirectory, path.basename(storageName))).catch((error) => {
+      if (error.code !== 'ENOENT') console.error('Deleted student resume cleanup failed:', error.code);
+    });
+  }
+  res.json({ success: true, data: { deleted: true } });
+});
+
 // ---------------------------------------------------------------------------
 // Analytics
 // ---------------------------------------------------------------------------
@@ -359,18 +417,24 @@ export const getAnalytics = asyncHandler(async (req, res) => {
     await Promise.all([
       query(
         `SELECT
-            (SELECT COUNT(*)::int FROM opportunities) AS total_opportunities,
+            (SELECT COUNT(*)::int FROM opportunities WHERE is_demo = FALSE) AS total_opportunities,
             (SELECT COUNT(*)::int FROM opportunities
-              WHERE is_active = TRUE AND deadline >= CURRENT_DATE) AS active_opportunities,
-            (SELECT COUNT(*)::int FROM users WHERE role = 'student') AS total_students,
-            (SELECT COUNT(*)::int FROM applications) AS total_applications,
-            (SELECT COUNT(*)::int FROM saved_opportunities) AS total_saves,
-            (SELECT COUNT(*)::int FROM opportunity_views) AS total_views`
+              WHERE sof_is_open(opportunities)) AS active_opportunities,
+            (SELECT COUNT(*)::int FROM users WHERE role = 'student' AND email_verified = TRUE
+              AND email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com')) AS total_students,
+            (SELECT COUNT(*)::int FROM applications a JOIN users u ON u.id = a.user_id
+              JOIN opportunities o ON o.id = a.opportunity_id
+              WHERE u.email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com') AND o.is_demo = FALSE) AS total_applications,
+            (SELECT COUNT(*)::int FROM saved_opportunities sv JOIN users u ON u.id = sv.user_id
+              JOIN opportunities o ON o.id = sv.opportunity_id
+              WHERE u.email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com') AND o.is_demo = FALSE) AS total_saves,
+            (SELECT COUNT(*)::int FROM opportunity_views v JOIN opportunities o ON o.id = v.opportunity_id
+              WHERE o.is_demo = FALSE) AS total_views`
       ),
       query(
         `SELECT c.name, c.color, COUNT(o.id)::int AS count
            FROM categories c
-           LEFT JOIN opportunities o ON o.category_id = c.id
+           LEFT JOIN opportunities o ON o.category_id = c.id AND o.is_demo = FALSE
           GROUP BY c.id
           ORDER BY count DESC`
       ),
@@ -379,23 +443,39 @@ export const getAnalytics = asyncHandler(async (req, res) => {
                 date_trunc('month', created_at) AS sort_key,
                 COUNT(*)::int AS students
            FROM users
-          WHERE role = 'student' AND created_at >= CURRENT_DATE - INTERVAL '6 months'
+          WHERE role = 'student' AND email_verified = TRUE AND email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com')
+            AND created_at >= CURRENT_DATE - INTERVAL '6 months'
           GROUP BY 1, 2
           ORDER BY 2`
       ),
       query(
-        `SELECT o.id, o.title, o.organization, o.views_count AS value
+        `SELECT o.id, o.title, o.organization, COUNT(v.id)::int AS value
            FROM opportunities o
-          ORDER BY o.views_count DESC
+           LEFT JOIN opportunity_views v ON v.opportunity_id = o.id
+           LEFT JOIN users viewer ON viewer.id = v.user_id
+          WHERE o.is_demo = FALSE
+            AND (v.user_id IS NULL OR viewer.email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com'))
+          GROUP BY o.id
+          ORDER BY value DESC, o.deadline ASC
           LIMIT 6`
       ),
       query(
-        `SELECT o.id, o.title, o.organization, o.saves_count AS value
+        `SELECT o.id, o.title, o.organization, COUNT(sv.user_id)::int AS value
            FROM opportunities o
-          ORDER BY o.saves_count DESC
+           LEFT JOIN saved_opportunities sv ON sv.opportunity_id = o.id
+           LEFT JOIN users saver ON saver.id = sv.user_id
+          WHERE o.is_demo = FALSE
+            AND (sv.user_id IS NULL OR saver.email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com'))
+          GROUP BY o.id
+          ORDER BY value DESC, o.deadline ASC
           LIMIT 6`
       ),
-      query(`SELECT status, COUNT(*)::int AS count FROM applications GROUP BY status`),
+      query(`SELECT a.status, COUNT(*)::int AS count FROM applications a
+              JOIN users u ON u.id = a.user_id
+              JOIN opportunities o ON o.id = a.opportunity_id
+             WHERE u.email NOT IN ('demo.student@example.com', 'demo.web@example.com', 'siddhesh@student.com', 'ananya@student.com')
+               AND o.is_demo = FALSE
+             GROUP BY a.status`),
     ]);
 
   const recommendationService = await checkServiceHealth();

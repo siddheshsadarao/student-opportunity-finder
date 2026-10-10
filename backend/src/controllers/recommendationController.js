@@ -39,7 +39,7 @@ async function hydrate(userId, results) {
           WHERE a.opportunity_id = o.id AND a.user_id = $1) AS application_status
      FROM opportunities o
      JOIN categories c ON c.id = o.category_id
-    WHERE o.id = ANY($2::int[]) AND o.is_active = TRUE`,
+    WHERE o.id = ANY($2::int[]) AND o.is_active = TRUE AND o.is_demo = FALSE`,
     [userId, ids]
   );
 
@@ -118,7 +118,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
          FROM saved_opportunities sv
          JOIN opportunities o ON o.id = sv.opportunity_id
         WHERE sv.user_id = $1
-          AND o.deadline BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+          AND sof_is_open(o) AND o.deadline BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
       [userId]
     ),
     query(
@@ -138,7 +138,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
             c.name AS category_name, c.slug AS category_slug, c.color AS category_color
        FROM opportunities o
        JOIN categories c ON c.id = o.category_id
-      WHERE o.is_active = TRUE
+      WHERE sof_is_open(o)
         AND o.deadline BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
         AND (
               EXISTS (SELECT 1 FROM saved_opportunities sv

@@ -14,6 +14,7 @@ and it covers hackathons, competitions, internships and scholarships, so one
 adapter fills four categories.
 """
 from __future__ import annotations
+from datetime import timezone, timedelta
 
 from ..common import (
     NormalisedOpportunity,
@@ -23,6 +24,7 @@ from ..common import (
     detect_skills,
     is_usable_deadline,
     parse_iso_date,
+    parse_deadline_timestamp,
 )
 
 SOURCE_KEY = "unstop"
@@ -156,6 +158,7 @@ def _convert(item: dict, category_slug: str) -> NormalisedOpportunity | None:
         application_url=apply_url,
         source_url=apply_url,
         deadline=deadline,
+        deadline_at=parse_deadline_timestamp(registration.get('end_regn_dt'), timezone(timedelta(hours=5, minutes=30))),
         start_date=parse_iso_date(registration.get("start_regn_dt")),
         end_date=parse_iso_date(item.get("end_date")),
         location=location,

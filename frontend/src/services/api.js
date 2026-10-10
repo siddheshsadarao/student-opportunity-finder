@@ -52,7 +52,10 @@ api.interceptors.request.use((config) => {
 // --- Unwrap responses and normalise errors ----------------------------------
 api.interceptors.response.use(
   (response) => response.data?.data ?? response.data,
-  (error) => {
+  async (error) => {
+    if (error.response?.data instanceof Blob) {
+      try { error.response.data = JSON.parse(await error.response.data.text()); } catch { /* Non-JSON gateway response. */ }
+    }
     // The session expired or the token is invalid -> send the user to login.
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
       tokenStorage.clear();
@@ -81,6 +84,8 @@ api.interceptors.response.use(
       message = 'The server took too long to respond. Please try again.';
     } else if (status === 429) {
       message = 'Too many attempts. Please wait a few minutes and try again.';
+    } else if (status === 413) {
+      message = 'The server rejected this file size. Use a file under 4 MB; if it still fails, the server upload limit needs updating.';
     } else if (status === 502 || status === 503 || status === 504) {
       message = 'The server is temporarily unavailable. Please try again in a moment.';
     } else if (status) {
@@ -103,6 +108,8 @@ api.interceptors.response.use(
 
 export const authApi = {
   register: (payload) => api.post('/auth/register', payload),
+  verifyEmail: (payload) => api.post('/auth/verify-email', payload),
+  resendVerification: (payload) => api.post('/auth/resend-verification', payload),
   login: (payload) => api.post('/auth/login', payload),
   adminLogin: (payload) => api.post('/auth/admin/login', payload),
   me: () => api.get('/auth/me'),
@@ -115,6 +122,13 @@ export const profileApi = {
   get: () => api.get('/profile'),
   update: (payload) => api.put('/profile', payload),
   completeOnboarding: (payload) => api.post('/profile/onboarding', payload),
+  uploadResume: (file) => {
+    const payload = new FormData();
+    payload.append('resume', file);
+    return api.post('/profile/resume', payload, { timeout: 60000, headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  downloadResume: () => api.get('/profile/resume', { responseType: 'blob' }),
+  deleteResume: () => api.delete('/profile/resume'),
 };
 
 export const opportunityApi = {
@@ -123,6 +137,10 @@ export const opportunityApi = {
   featured: () => api.get('/opportunities/featured'),
   filters: () => api.get('/opportunities/filters'),
   calendar: (params) => api.get('/opportunities/calendar', { params }),
+};
+
+export const assistantApi = {
+  search: (message, history = []) => api.post('/assistant/search', { message, history }),
 };
 
 export const savedApi = {
@@ -164,6 +182,9 @@ export const dashboardApi = {
 export const adminApi = {
   analytics: () => api.get('/admin/analytics'),
   students: (params) => api.get('/admin/students', { params }),
+  studentResume: (id) => api.get(`/admin/students/${id}/resume`, { responseType: 'blob' }),
+  setStudentStatus: (id, isActive) => api.patch(`/admin/students/${id}/status`, { isActive }),
+  deleteStudent: (id, confirmEmail) => api.delete(`/admin/students/${id}`, { data: { confirmEmail } }),
   opportunities: (params) => api.get('/admin/opportunities', { params }),
   createOpportunity: (payload) => api.post('/admin/opportunities', payload),
   updateOpportunity: (id, payload) => api.put(`/admin/opportunities/${id}`, payload),

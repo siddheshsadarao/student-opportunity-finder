@@ -256,7 +256,12 @@ for migration in \
     migration_002_ingestion.sql \
     migration_003_mlh.sql \
     migration_004_sources.sql \
-    migration_005_source_expansion.sql
+    migration_005_source_expansion.sql \
+    migration_006_email_resume.sql \
+    migration_007_student_phone.sql \
+    migration_008_remove_demo_opportunities.sql \
+    migration_009_listing_freshness.sql \
+    migration_010_student_state.sql
 do
     sudo -u "$APP_USER" env PGPASSWORD="$DB_PASSWORD" \
         psql -h localhost -U "$DB_USER" -d "$DB_NAME" -q \
@@ -277,6 +282,7 @@ done
 
 # -----------------------------------------------------------------------------
 say "Creating systemd services"
+install -d -o "$APP_USER" -g "$APP_USER" -m 700 /var/lib/sof/resumes
 # -----------------------------------------------------------------------------
 cat > /etc/systemd/system/sof-api.service <<EOF
 [Unit]
@@ -297,7 +303,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=false
-ReadWritePaths=$APP_DIR
+ReadWritePaths=$APP_DIR /var/lib/sof/resumes
 
 [Install]
 WantedBy=multi-user.target

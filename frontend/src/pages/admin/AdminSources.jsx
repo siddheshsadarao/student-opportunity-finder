@@ -125,7 +125,7 @@ export default function AdminSources() {
         {[
           ['Imported automatically', totals.external_total],
           ['Currently open', totals.external_live],
-          ['Added by hand', totals.manual_total],
+          ['Hidden as stale', totals.stale_count],
         ].map(([label, value]) => (
           <div key={label} className="card p-5">
             <p className="text-sm text-slate-500">{label}</p>

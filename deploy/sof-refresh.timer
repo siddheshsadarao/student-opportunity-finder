@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly Student Opportunity Finder source refresh
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=120
+Persistent=true
+Unit=sof-refresh.service
+
+[Install]
+WantedBy=timers.target

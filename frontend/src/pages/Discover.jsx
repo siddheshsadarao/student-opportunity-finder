@@ -44,6 +44,8 @@ export default function Discover() {
   // value is what actually goes into the URL and triggers a request.
   const [searchText, setSearchText] = useState(searchParams.get('search') || '');
   const debouncedSearch = useDebounce(searchText, 400);
+  const [eligibilityText, setEligibilityText] = useState(searchParams.get('eligibility') || '');
+  const debouncedEligibility = useDebounce(eligibilityText, 350);
 
   const { toggleSave, savingIds } = useSaveToggle(setOpportunities);
 
@@ -56,6 +58,8 @@ export default function Discover() {
       location: searchParams.get('location') || '',
       mode: searchParams.get('mode') || '',
       organization: searchParams.get('organization') || '',
+      eligibility: searchParams.get('eligibility') || '',
+      source: searchParams.get('source') || '',
       deadlineDays: searchParams.get('deadlineDays') || '',
       sort: searchParams.get('sort') || 'relevant',
       page: Number(searchParams.get('page') || 1),
@@ -82,6 +86,10 @@ export default function Discover() {
     if (debouncedSearch !== filters.search) setFilter('search', debouncedSearch);
   }, [debouncedSearch, filters.search, setFilter]);
 
+  useEffect(() => {
+    if (debouncedEligibility !== filters.eligibility) setFilter('eligibility', debouncedEligibility);
+  }, [debouncedEligibility, filters.eligibility, setFilter]);
+
   // Load the dropdown options once.
   useEffect(() => {
     opportunityApi
@@ -105,6 +113,8 @@ export default function Discover() {
         location: filters.location || undefined,
         mode: filters.mode || undefined,
         organization: filters.organization || undefined,
+        eligibility: filters.eligibility || undefined,
+        source: filters.source || undefined,
         deadlineBefore: daysToDate(filters.deadlineDays) || undefined,
         sort: filters.sort,
         page: filters.page,
@@ -139,6 +149,7 @@ export default function Discover() {
 
   const clearAll = () => {
     setSearchText('');
+    setEligibilityText('');
     setSearchParams(new URLSearchParams());
   };
 
@@ -148,6 +159,8 @@ export default function Discover() {
     filters.location,
     filters.mode,
     filters.organization,
+    filters.eligibility,
+    filters.source,
     filters.deadlineDays,
   ].filter(Boolean).length;
 
@@ -350,6 +363,20 @@ export default function Discover() {
               </select>
             </div>
 
+            <div className="px-4 py-3">
+              <label htmlFor="filter-eligibility" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">Eligibility</label>
+              <input id="filter-eligibility" value={eligibilityText} onChange={(event) => setEligibilityText(event.target.value)} placeholder="e.g. undergraduate" className="input text-sm" />
+            </div>
+
+            {/* Deadline */}
+            <div className="px-4 py-3">
+              <label htmlFor="filter-source" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">Source</label>
+              <select id="filter-source" value={filters.source} onChange={(event) => setFilter('source', event.target.value)} className="input text-sm">
+                <option value="">All sources</option>
+                {filterOptions?.sources?.map((source) => <option key={source} value={source}>{source.replace(/[-_]/g, ' ')}</option>)}
+              </select>
+            </div>
+
             {/* Deadline */}
             <div className="px-4 py-3">
               <label
@@ -390,7 +417,7 @@ export default function Discover() {
                   <X className="h-3 w-3" />
                 </button>
               ))}
-              {['category', 'mode', 'location', 'organization'].map((key) =>
+              {['category', 'mode', 'location', 'organization', 'source', 'eligibility'].map((key) =>
                 filters[key] ? (
                   <button
                     key={key}

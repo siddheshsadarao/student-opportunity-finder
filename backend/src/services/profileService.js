@@ -64,10 +64,14 @@ export async function getFullProfile(userId) {
     branch: profile.branch,
     year: profile.year,
     city: profile.city,
+    state: profile.state,
+    phone: profile.phone,
     careerGoal: profile.career_goal,
     preferredMode: profile.preferred_mode,
     preferredLocation: profile.preferred_location,
     bio: profile.bio,
+    hasResume: Boolean(profile.resume_storage_name),
+    resumeOriginalName: profile.resume_original_name || null,
     onboardingDone: profile.onboarding_done,
     skills: skills.rows,
     interests: interests.rows,
@@ -139,15 +143,17 @@ export async function upsertProfile(userId, data) {
     //    so a partial update (e.g. only "city") does not wipe other fields.
     const { rows } = await client.query(
       `INSERT INTO student_profiles
-              (user_id, college, degree, year, branch, city, career_goal,
-               preferred_mode, preferred_location, bio, onboarding_done)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'Any'), $9, $10, COALESCE($11, FALSE))
+              (user_id, college, degree, year, branch, city, phone, career_goal,
+               preferred_mode, preferred_location, bio, onboarding_done, state)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'Any'), $10, $11, COALESCE($12, FALSE), $13)
        ON CONFLICT (user_id) DO UPDATE SET
               college            = COALESCE(EXCLUDED.college,            student_profiles.college),
               degree             = COALESCE(EXCLUDED.degree,             student_profiles.degree),
               year               = COALESCE(EXCLUDED.year,               student_profiles.year),
               branch             = COALESCE(EXCLUDED.branch,             student_profiles.branch),
               city               = COALESCE(EXCLUDED.city,               student_profiles.city),
+              state              = COALESCE(EXCLUDED.state,              student_profiles.state),
+              phone              = COALESCE(EXCLUDED.phone,              student_profiles.phone),
               career_goal        = COALESCE(EXCLUDED.career_goal,        student_profiles.career_goal),
               preferred_mode     = COALESCE(EXCLUDED.preferred_mode,     student_profiles.preferred_mode),
               preferred_location = COALESCE(EXCLUDED.preferred_location, student_profiles.preferred_location),
@@ -161,11 +167,13 @@ export async function upsertProfile(userId, data) {
         data.year ?? null,
         data.branch ?? null,
         data.city ?? null,
+        data.phone ?? null,
         data.careerGoal ?? null,
         data.preferredMode ?? null,
         data.preferredLocation ?? null,
         data.bio ?? null,
         data.onboardingDone ?? null,
+        data.state ?? null,
       ]
     );
 

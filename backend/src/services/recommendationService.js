@@ -82,7 +82,7 @@ async function fallbackScores(userId, limit) {
               '[]'
             ) AS skills
        FROM opportunities o
-      WHERE o.is_active = TRUE AND o.deadline >= CURRENT_DATE`
+      WHERE sof_is_open(o)`
   );
 
   const scored = opportunities.rows.map((opp) => {

@@ -25,7 +25,7 @@ export const getIngestionOverview = asyncHandler(async (req, res) => {
       `SELECT s.id, s.key, s.name, s.homepage, s.kind, s.is_enabled, s.auto_approve,
               s.rate_limit_secs, s.notes, s.last_run_at,
               COUNT(o.id) FILTER (
-                WHERE o.is_active AND o.deadline >= CURRENT_DATE
+                WHERE sof_is_open(o)
               )::int AS live_count
          FROM ingestion_sources s
          LEFT JOIN opportunities o ON o.source = s.key
@@ -42,8 +42,8 @@ export const getIngestionOverview = asyncHandler(async (req, res) => {
     query(
       `SELECT
           COUNT(*) FILTER (WHERE is_external)::int                       AS external_total,
-          COUNT(*) FILTER (WHERE is_external AND is_active
-                             AND deadline >= CURRENT_DATE)::int          AS external_live,
+          COUNT(*) FILTER (WHERE is_external AND sof_is_open(opportunities))::int AS external_live,
+          COUNT(*) FILTER (WHERE is_external AND (ingested_at IS NULL OR ingested_at <= NOW() - INTERVAL '48 hours'))::int AS stale_count,
           COUNT(*) FILTER (WHERE NOT is_external)::int                   AS manual_total,
           MAX(ingested_at)                                               AS last_ingested_at
          FROM opportunities`
